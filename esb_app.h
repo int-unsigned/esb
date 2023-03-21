@@ -21,7 +21,7 @@
 #endif
 
 
-//TOBE: Это блок настроек есб по-уполчанию. При разростании заслуживает вынесения в отдельный файл esb_config_def.h
+//TOBE: Это блок настроек есб по-умолчанию. При разростании заслуживает вынесения в отдельный файл esb_config_def.h
 #if defined(ESB_USE_EXPLICIT_STRING) && ESB_USE_EXPLICIT_STRING
 #define ESB_EXPLICIT_STRING		explicit
 #else
