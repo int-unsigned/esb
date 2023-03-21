@@ -21,12 +21,13 @@
 #endif
 
 
-//TODO: esb_config_def.h
+//TOBE: Это блок настроек есб по-уполчанию. При разростании заслуживает вынесения в отдельный файл esb_config_def.h
 #if defined(ESB_USE_EXPLICIT_STRING) && ESB_USE_EXPLICIT_STRING
 #define ESB_EXPLICIT_STRING		explicit
 #else
 #define ESB_EXPLICIT_STRING	
 #endif
+
 
 #if defined(ESB_USE_EXPLICIT_NUMERIC) && ESB_USE_EXPLICIT_NUMERIC
 #define ESB_EXPLICIT_NUMERIC		explicit
@@ -39,6 +40,7 @@
 #define ESB_USE_AUTO_CONVERTION_VALUE_TO_CPP_TYPE 1
 #endif
 
+
 // Поиск индекса свойства объекта устроен так (вернее их строка), что полностью корректно это только через String, но String всегда аллоцирует новую строку
 // в мем-пуле 1С. Это досаднейшая особенность чреватая и исключениями и просадкой производительности.
 // В реализации метода _Find от wstring_view сделана попытка эмулировать String без лишней аллокации. Работает. Вроде. Но всякое может быть. Тогда придется отключить.
@@ -46,15 +48,18 @@
 #define ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK	1
 #endif
 
+
 #ifndef ESB_USE_RUSSIAN
 #define ESB_USE_RUSSIAN	0
 #endif
+
 
 #if defined(ESB_USE_ISEQUALGUID_SSE) || defined(ESB_USE_ISEQUALGUID_64_2) || defined(ESB_USE_ISEQUALGUID_32_4)
 //ok
 #else
 #define ESB_USE_ISEQUALGUID_64_2 1
 #endif
+
 
 #if defined(ESB_USE_DETOUR) && ESB_USE_DETOUR
 #if !__has_include("detours/include/detours.h")
@@ -64,8 +69,10 @@
 //----------------------------
 
 
-// теперь наш ассерт. разобраться с ним надо до подключения всех остальных
-// для exeption
+
+
+
+//----------------------------
 #define ESB_NORETURN	__declspec(noreturn)
 #define ESB_NODISCARD	[[nodiscard]]
 #define ESB_UNUSED		[[maybe_unused]]
