@@ -14,10 +14,10 @@
 
 
 
-// Файл esb_config.h не часть папки esb. Вы можете создать его в папке своего проекта и в свойствах проекта указать как дополнтельную папку проекта .\ 
-// тогда этот файл будет найден и подключен
-#if __has_include("esb_config.h")
-#include "esb_config.h"
+// Файл esb_app_config.h не часть папки esb. Вы можете создать его в папке своего проекта и подключать до подключения esb.h 
+// или в свойствах проекта указать как дополнтельную папку проекта .\ тогда этот файл будет найден и подключен автоматически
+#if !defined(ESB_APP_CONFIG_H_) && __has_include("esb_app_config.h")
+#include "esb_app_config.h"
 #endif
 
 
@@ -62,13 +62,27 @@
 
 
 #if defined(ESB_USE_DETOUR) && ESB_USE_DETOUR
-#if !__has_include("detours/include/detours.h")
-#error ms-detours not found in path
+#	ifdef ESB_USE_DETOUR_PATH
+#		define ESB_DETOUR_INCLUDE	PP_STRINGIZE(  PP_CAT(ESB_USE_DETOUR_PATH , /include/detours.h ) )
+#		define ESB_DETOUR_LIB		PP_STRINGIZE(  PP_CAT(ESB_USE_DETOUR_PATH , /lib.X86/detours.lib ) )
+#		if !__has_include(   ESB_DETOUR_INCLUDE  )
+#			error ms-detours not found in path
+#		endif
+#	else	//nodef	ESB_USE_DETOUR_PATH
+#		error for using detours your mast define valid ESB_USE_DETOUR_PATH or disable ESB_USE_DETOUR 
+#	endif	//ifdef ESB_USE_DETOUR_PATH
 #endif
-#endif
-//----------------------------
+// end esb_config_default ----------------------------
 
 
+// Строить итераторы на основе "голого" указателя на коллекцию или на основе InterfacePtr
+// в случае InterfacePtr итераторы (и объекты-ссылки), которые они возвращают становятся самостоятельными объектаим и удерживают коллекцию в памяти
+// это медленнее, может быть черевато циклическим ссылками, но не будет "висящих ссылок"
+// На основе "голого" указателя - это с++way, быстрее, но можно попасть на висящую ссылку, когда коллекция уже умерла, а итератор еще жив.
+//TOBE:	Имплементировано только для IxCollectionIterator`s.	Прочие имплементации сами по себе нуждаются в осмыслении и доработке
+#ifndef ESB_USE_OWNING_COLLECTION_ITERATOR
+#define ESB_USE_OWNING_COLLECTION_ITERATOR		0
+#endif
 
 
 
@@ -108,7 +122,7 @@ namespace esb {
 	using strview_t = string_view_t;
 
 	//esbhlp
-	ESB_NORETURN inline void				throw_error(const std::wstring_view& error_text_);
+	ESB_NORETURN inline void				throw_error(const strview_t& error_text_);
 }
 
 
@@ -116,8 +130,8 @@ namespace esb {
 #ifdef _LIB
 // в режиме .lib -->
 #ifdef NDEBUG		// _LIB - release
-#ifdef RELEASE_BUILD
-// полностью release-build - без ассертов вообще. требует дополнительно макроса RELEASE_BUILD
+#ifdef ESB_RELEASE_BUILD
+// полностью release-build - без ассертов вообще. требует дополнительно макроса ESB_RELEASE_BUILD
 #define ESB_ASSERT(expression)
 #else
 // обычный release-build - это assertion-build - ассерты отбрасываются на handler компоненты
@@ -158,6 +172,10 @@ extern ESB_NORETURN void esb_assert_handler(unsigned line_);
 #define ESB_WARN_NO_VIRTUAL_ANY_DTOR		ESB_WARN_NO_VIRTUAL_TRIVIAL_DTOR  ESB_WARN_NO_VIRTUAL_NONTRIVIAL_DTOR
 //конструктор по умолчанию неявно определен как удаленный
 #define ESB_WARN_NO_DEFAULT_CTOR			4623
+//конструктор копий неявно определен как удаленный
+#define ESB_WARN_NO_CTOR_COPY				4625
+//конструктор перемещения неявно определен как удаленный
+#define ESB_WARN_NO_CTOR_MOVE				5026
 //esb::DispInfoStatMeth: "3"-байтовые поля добавлены после данные-член "esb::DispInfoStatMeth::has_retval_"
 #define ESB_WARN_PADDING					4820
 //относительный путь поиска включаемых файлов содержит ".." (для esbhlp так и должно быть)
@@ -225,7 +243,14 @@ extern ESB_NORETURN void esb_assert_handler(unsigned line_);
 // 
 // Значение задается просто цифрой, т.к. прагме detect_mismatch нужно дать значение в виде строки, а макрос она разворачивать не хочет
 // (может как-то можно заставить, но решил не утруждаться -	"меньше кода - меньше глюков")
-#define ESB_POINTER_SIZE	4
+#if UINTPTR_MAX == UINT32_MAX
+#	define ESB_POINTER_SIZE	4
+#elif UINTPTR_MAX == UINT64_MAX
+#	define ESB_POINTER_SIZE	8
+#else
+#	error unexpected UINTPTR_MAX undefined or have wrong value.
+#endif
+
 ESB_CHECK_AND_DETECT_MISMATCH(ESB_POINTER_SIZE, (sizeof(void*)))
 
 
@@ -244,8 +269,6 @@ ESB_CHECK_AND_DETECT_MISMATCH(ESB_POINTER_SIZE, (sizeof(void*)))
 #else
 #define ESB_USE_ITERATOR_DEBUG_LEVEL 0
 #endif
-
-
 
 
 #endif	//__ESB_APP_H__

@@ -305,7 +305,7 @@ namespace esb {
 
 namespace esb {
 //namespace internal {
-	// этот метод нужно включать после esb_base, когда уже все Numeric и т.п. определены
+
 	template<class T>
 	T check_and_make_from_var_ex(const IVariable* pvar_) {
 		if constexpr (is_esb_class<T>) {
@@ -365,7 +365,43 @@ namespace esb {
 
 //}	//namespace esb-internal
 
+	
+	namespace internal {
+		template<class RetT>
+		inline void variable_set_value(IVariable& ret_, RetT&& res_) {
+			IVariable_SetValue(ret_, get_interface(std::move(res_)));
+		}
+		template<class RetT>
+		inline void variable_set_value(IVariable* pret_, RetT&& res_) {
+			return variable_set_value(*pret_, std::move(res_));
+		}
 
+#if ESB_USE_AUTO_CONVERTION_VALUE_TO_CPP_TYPE
+#define IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(CPP_T_)							\
+		template<>																	\
+		inline void variable_set_value<CPP_T_>(IVariable* pret_, CPP_T_&& res_) {	\
+			return variable_set_value(pret_, compatable_cpp_type_t<CPP_T_>{res_});	\
+		}
+
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(bool)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(signed char)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(short)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(int)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(long)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(long long)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(unsigned char)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(unsigned short)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(unsigned int)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(unsigned long)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(unsigned long long)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(char)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(double)
+		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(strview_t)
+#undef IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE
+#endif	//ESB_USE_AUTO_CONVERTION_VALUE_TO_CPP_TYPE
+	}	//namespace esb-internal
+
+	
 	//Опциональным для 1С считаем параметр декларированный как UndefOr<...>
 	template<typename>
 	struct is_param_opt_t {
@@ -469,7 +505,7 @@ namespace internal{
 //Критично заключать блок в {}. Иначе ; в конце трактуется как асм-комментарий и все что после нее игнорируется - если использовать макрос внутри другого макроса с переносом строки
 #define VARIABLE_USED(VAR_) __asm {mov eax, VAR_}
 // для декларации псевдо-енум-структоры ID методов
-//TODO: Нужно в макрос обернуть и саму декларацию структуры - struct MethId -> ESB_DECL_METHID(...), и в этот макрос аргументами передавать ESB_ID
+//TOBO: Нужно в макрос обернуть и саму декларацию структуры - struct MethId -> ESB_DECL_METHID(...), и в этот макрос аргументами передавать ESB_ID
 //		`;` после ESB_ID добавить в макрос и убрать из текста.
 //		тогда мы получим возможность "в зависимости от" менять способ представления диспатч-идентификаторов. Например для варианта динамической загрузки
 //		можем сделать id не constexpr, а просто static и биндить их при startup. Малореально без reflection, но.. когда-то оно будет.
@@ -688,8 +724,6 @@ namespace esb
 	using ix_collection_t::SetAt;
 
 
-//#undef ESB_USE_ITERATOR_DEBUG_LEVEL
-//#define ESB_USE_ITERATOR_DEBUG_LEVEL 0
 
 
 	// Псевдо-референс объект для итератора относится только к не-конст итератору!. Конст-итератор в качестве const_reference возвращает само значение (value_type)!
@@ -701,30 +735,45 @@ namespace esb
 		using val_t = EsbValueClassT;
 		using me_t = IxCollectionIteratorReft<val_t>;
 	protected:
-#if ESB_USE_ITERATOR_DEBUG_LEVEL != 0
-		const interface_t&	m_coll;
+#if ESB_USE_OWNING_COLLECTION_ITERATOR != 0
+		interface_t		m_coll;
 		interface_raw_t& coll() const { return *m_coll; }
 #else
 		interface_raw_t* m_coll;
 		interface_raw_t& coll() const { assert(m_coll);  return *m_coll; }
 #endif
-		const size_t		m_pos;
+		size_t		m_pos;
 	public:
-#if ESB_USE_ITERATOR_DEBUG_LEVEL != 0
-		IxCollectionIteratorReft(const interface_t& collection_, size_t position_) noexcept : m_coll(collection_), m_pos(position_) {}
+#if ESB_USE_OWNING_COLLECTION_ITERATOR != 0
+		IxCollectionIteratorReft(const interface_t& collection_, size_t position_) noexcept : m_coll(collection_), m_pos(position_) {}	//copy interface
 #else
 		IxCollectionIteratorReft(interface_raw_t* collection_, size_t position_) noexcept : m_coll(collection_), m_pos(position_) {}
 #endif
 	public:
 		friend bool operator== (const me_t& a, const me_t& b) noexcept	{ return (&a == &b) || (a.m_coll == b.m_coll && a.m_pos == b.m_pos); };
 		val_t GetValue() const											{ return make<val_t>(IxCollection_GetAt(coll(), m_pos)); }
-		void SetValue(ConstPara<val_t> value_) const						{ IxCollection_SetAt(coll(), m_pos, value_); }
+		void SetValue(const val_t& value_) 								{ IxCollection_SetAt(coll(), m_pos, value_); }
+		void SetValue(val_t&& value_) 									{ IxCollection_SetAt(coll(), m_pos, std::move(value_)); }
+		void SetValueFromVar(ConstPara<val_t> value_) 					{ IxCollection_SetAt(coll(), m_pos, value_); }
 		void SetValueFrom(const me_t& other_)							{ if (*this != other_) IxCollection_Copy(other_.coll(), other_.m_pos, this->coll(), this->m_pos); }
-		friend void swap(const me_t& a, const me_t& b)					{ if (a != b) IxCollection_Swap(a.coll(), a.m_pos, b.coll(), b.m_pos); }
+		//NOTE	Наш свап принимает нас по значению, а не ссылке т.к. например std::iter_swap вызывает метод swap(*_Left, *_Right);
+		//		а rvalue не вяжется к lvalue и непонятка выходит. Также можно было-бы декларироваться как const me_t& но для метода свап это тоже выглядит погано. Хз как лучше..
+		friend void swap(me_t a, me_t b) noexcept						{ if (a != b) IxCollection_Swap(a.coll(), a.m_pos, b.coll(), b.m_pos); }
 	public:
 		operator val_t() const											{ return GetValue(); }
-		me_t& operator=(const val_t& value_)							{ SetValue(value_);			return *this; }
-		me_t& operator=(const me_t& other_)								{ SetValueFrom(other_);		return *this; }
+		me_t& operator=(const me_t& other_)								{ SetValueFrom(other_);			return *this; }
+		me_t& operator=(me_t&& other_)									{ SetValueFrom(other_);			return *this; }	//копируем, не будем приводить other_ в invalid state
+		me_t& operator=(const val_t& value_) 							{ SetValue(value_);				return *this; }
+		me_t& operator=(val_t&& value_) 								{ SetValue(std::move(value_));	return *this; }
+		// Если мы "ссылка" на Arbitrary, то можем позволить переместить в нас любое значение
+		// NOTE	Любое, а не только примитивное значения. Принудительно делая std::move(..) сюда юзер знает, что творит..
+		// (поскольку шаблон более ограничен чем просто метод, то при перемещении в нас Arbitrary выберется метод выше. конфликта не будет)
+		template<EsbClassConcept EsbValueT>
+		requires (is_esb_arbitrary<val_t>)
+		me_t& operator=(EsbValueT&& value_) { 
+			SetValue( std::move(value_).operator esb::Arbitrary&&() );
+			return *this; 
+		}
 	};
 
 
@@ -748,7 +797,7 @@ namespace esb
 		using pointer = const_reference*;	//unused
 		using reference = const_reference;
 	protected:
-#if ESB_USE_ITERATOR_DEBUG_LEVEL != 0
+#if ESB_USE_OWNING_COLLECTION_ITERATOR != 0
 		interface_ptr_t		m_col;		// !!! must be NOT REF && NOT CONST for movable !!!
 #else									//
 		interface_raw_t*	m_col;		// !!! must be NOT REF && NOT CONST for movable !!!
@@ -758,8 +807,8 @@ namespace esb
 		size_t				m_size = 0;
 		//
 		void _check_col() const noexcept						{ ESB_VERIFY(this->m_col, "iterator not initialized");	}
-		//TODO: два null-итератора равны. это нормально? или на усмотрение InterfacePtr?
-		void _check_col(const me_t& other_) const noexcept		{ ESB_VERIFY(this->m_col == other_.m_col, "iterators incompatible");	}
+		void _check_col(const me_t& other_) const noexcept		{ ESB_VERIFY(other_.m_col, "other iterator not initialized");	}
+		void _check_compat(const me_t& other_) const noexcept	{ ESB_VERIFY(other_.m_col && this->m_col == other_.m_col, "other iterators not initialized or incompatible"); }
 		void _check_pos_dec() const noexcept					{ ESB_VERIFY(this->m_pos > 0, "cannot decrement iterator"); }
 		// pos == size есть допустимая позиция для итератора - это end-итератор. Но pos==size (end) недопустима для deref
 		void _check_pos_inc() const noexcept					{ ESB_VERIFY(this->m_pos < m_size, "cannot increment iterator");	}
@@ -780,6 +829,7 @@ namespace esb
 #else
 		void _check_col() const noexcept {}
 		void _check_col(const me_t&) const noexcept {}
+		void _check_compat(const me_t&) const noexcept {}
 		void _check_pos_dec() const noexcept {}
 		void _check_pos_inc() const noexcept {}
 		void _check_pos_add(const difference_type) const noexcept {}
@@ -791,16 +841,19 @@ namespace esb
 		void _add(const dif_t offs_) noexcept		{ _check_pos_add(offs_);	this->m_pos += offs_; }
 	public:
 		IxCollectionIteratorConst() : m_col{ nullptr } {} //= default !!! Концепты!!!;
-#if ESB_USE_ITERATOR_DEBUG_LEVEL != 0
+#if ESB_USE_OWNING_COLLECTION_ITERATOR != 0
 		// мы всегда принимаем интерфейс в raw-виде, но в дебаге создаем для него новый интерфейс-птр
 		// принимать в raw-виде нужно потому, что наш интерфейс не должен быть конст для удовлетворения концептам,
 		// а коллекции, когда они конст, не-константный интерфейс-птр отдать не могут. а не-константный raw-интерфейс из конст-птр отдать могут.
-		IxCollectionIteratorConst(interface_raw_t& collection_, size_t position_) noexcept : m_col(interface_ptr_t{ collection_ }), m_pos(position_) {
-			m_size = IxCollection_Size(collection_);
-		}
+		IxCollectionIteratorConst(interface_raw_t& collection_, size_t position_) noexcept : m_col(interface_ptr_t{ collection_ }), m_pos(position_) 
 #else
-		IxCollectionIteratorConst(interface_raw_t& collection_, size_t position_) noexcept : m_col(&collection_), m_pos(position_) {}
+		IxCollectionIteratorConst(interface_raw_t& collection_, size_t position_) noexcept : m_col(&collection_), m_pos(position_)
 #endif
+		{
+#if ESB_USE_ITERATOR_DEBUG_LEVEL != 0
+			m_size = IxCollection_Size(collection_);
+#endif
+		}
 
 	public:
 		ESB_NODISCARD const_reference operator*() const {
@@ -823,18 +876,20 @@ namespace esb
 		me_t& operator-=(const dif_t offset_) noexcept						{ return *this += -offset_;	}	// МИНУС offset!
 		ESB_NODISCARD me_t operator-(const dif_t offset_) const noexcept	{ me_t tmp = *this; tmp -= offset_; return tmp; }
 		ESB_NODISCARD dif_t operator-(const me_t& other_) const noexcept	{ 
-			_check_col(other_);
+			_check_col();
+			_check_compat(other_);
 			return static_cast<difference_type>(m_pos) - static_cast<difference_type>(other_.m_pos);
 		}
 		ESB_NODISCARD bool operator==(const me_t& other_) const				{ 
+			_check_col();
 			_check_col(other_); 
 			return (m_col == other_.m_col && m_pos == other_.m_pos); 
 		}
 		ESB_NODISCARD std::strong_ordering operator<=>(const me_t& other_) const noexcept {
+			_check_col();
 			_check_col(other_);
-			if (const auto col_compare_result = (this->m_col <=> other_.m_col); col_compare_result != std::strong_ordering::equal)
-				return col_compare_result;
-			return this->m_pos <=> other_.m_pos;
+			const auto col_compare_result = (this->m_col <=> other_.m_col);
+			return (col_compare_result == std::strong_ordering::equal)? (this->m_pos <=> other_.m_pos) : col_compare_result;
 		}
 	};
 	//
@@ -1021,12 +1076,16 @@ namespace esb
 		{}
 		using key_t = EsbClassKeyT;
 		using value_t = EsbClassValT;
-		void Insert(ConstPara<EsbClassKeyT> Key_, ConstPara<EsbClassValT> Value_)		{ return AxCollection_Insert(*this->m_interface, Key_, Value_);		}
+		void Insert(ConstPara<EsbClassKeyT> Key_, ConstPara<EsbClassValT> Value_)	{ return AxCollection_Insert(*this->m_interface, Key_, Value_);		}
 		void Remove(ConstPara<EsbClassKeyT> Key_)									{ return AxCollection_Remove(*this->m_interface, Key_);				}
 		void Clear()																{ return AxCollection_Clear(*this->m_interface);					}
 	};
 
 
+
+	// Специализированная имплементация интерфейса AxCollection для Соответствие (Map/FixedMap)
+	// Для получения значения используется стратегия get-or-undef, т.е. если ключ отсутствует в коллекции, то возвращается Undef
+	// Для установки значения используется стратегия replase-or-insert, т.е. если ключ присутствует в коллекции, то замещаем значения иначе добавляем новую пару
 	template<class AxCollectionInterfaceT>
 	struct AxCollectionMapItemROImpl
 	{
@@ -1037,7 +1096,7 @@ namespace esb
 		// Мы независимый объект-ассессор для значения и можем жить дольше чем тот, кто нас отдал (создал)
 		// для этого мы удерживаем интерфейс коллекции и объект ключа.
 		// 
-		// TODO: Нужно попробовать сделать у ЕСБ два режима - а) когда все псевдо-итераторы незавимимы и б) когда они все ссылки
+		// TOBE: Можно сделать два режима - а) когда все псевдо-итераторы незавимимы и б) когда они все ссылки
 		//		 Все таки с++ - ссылок бояться в с++ не ходить...
 		// 
 		// вызов GetterT::getValue мы делаем каждый раз когда у нас запрашивают значение. мы не кэширум значение, поскольку не наше это дело.
@@ -1056,23 +1115,27 @@ namespace esb
 		AxCollectionMapItemROImpl(const interface_t& interface_, Var<key_t>&& key_) : m_interface(interface_), m_key(std::move(key_))
 		{}
 		struct value_getter_t {
-			static Arbitrary getArbitraryValueOrUndef(const interface_t& interface_, ConstPara<key_t> key_) {
+			static Arbitrary GetArbitraryValueOrUndef(const interface_t& interface_, ConstPara<key_t> key_) {
 				if (IValuePairPtr ppair = AxCollection_Find(*interface_, key_))
 					return make<Arbitrary>(IValuePair_GetValue(*ppair));
 				else
 					return MakeArbitraryDefault<Undef>();
 			}
 		};
-		value_t GetValue() const	{ return value_getter_t::getArbitraryValueOrUndef(*m_interface, m_key); }
+		value_t GetValue() const	{ return value_getter_t::GetArbitraryValueOrUndef(*m_interface, m_key); }
 		operator value_t() const	{ return GetValue(); }
 	};
 
 
 
+	struct AxCollectionMapItemRW;
 
-
-	struct AxCollectionMapItemRO : public AxCollectionMapItemROImpl<IAxCollectionROPtr>
+	class AxCollectionMapItemRO : public AxCollectionMapItemROImpl<IAxCollectionROPtr>
 	{
+		using AxCollectionMapItemROImpl<IAxCollectionROPtr>::get_interface;
+		using AxCollectionMapItemROImpl<IAxCollectionROPtr>::get_key;
+		friend AxCollectionMapItemRW;
+	public:
 		AxCollectionMapItemRO(const interface_t& interface_, Var<key_t>&& key_) : AxCollectionMapItemROImpl(interface_, std::move(key_))
 		{}
 		ESB_PROPERTY_FIELD_RO(value_t, Value);
@@ -1084,7 +1147,7 @@ namespace esb
 		AxCollectionMapItemRW(const interface_t& interface_, Var<key_t>&& key_)	: AxCollectionMapItemROImpl(interface_, std::move(key_))
 		{}
 		struct value_setter_t {
-			static void setValueReplaceOrInsert(const interface_t& interface_, ConstPara<key_t> key_, ConstPara<value_t> value_) {
+			static void SetValueReplaceOrInsert(const interface_t& interface_, ConstPara<key_t> key_, ConstPara<value_t> value_) {
 				if (IValuePairPtr ppair = AxCollection_Find(*interface_, key_))
 					AxCollection_Replace(*interface_, key_, value_);
 				else
@@ -1092,7 +1155,7 @@ namespace esb
 			}
 		};
 		void SetValue(ConstPara<value_t> value_)							{ 
-			return value_setter_t::setValueReplaceOrInsert(*get_interface(), get_key(), value_); 
+			return value_setter_t::SetValueReplaceOrInsert(*get_interface(), get_key(), value_);
 		}
 		AxCollectionMapItemRW& operator=(ConstPara<value_t> NewValue_)	{
 			SetValue(NewValue_);
@@ -1100,15 +1163,16 @@ namespace esb
 		}
 		// См. Примечание для IxCollectionItemRW& operator =
 		AxCollectionMapItemRW& operator =(const AxCollectionMapItemRW& other_) {
-			if (&other_ != this) {				//TODO: можно обработать присвоение того-же самого ключа... хотя думаю 1С сделает это лучще... или сделать? для скорости?
-				value_t v = other_.GetValue();	//TODO: нужно сделать поддержку этой процедуры в esbhlp (с учетом стратегии Map: AxCollectionMap_Copy)
-				SetValue(v);
+			if (&other_ != this) {				
+				//TOBE: мы не проверяем на присвоение объекта с таким же ключем - мы просто не знаем что такое "тот-же-самый-ключ-для-коллекции"
+				//		если узнаем, то можно немного оптимизировать
+				AxCollection_ReplaceOrInsertFromGetOrUndef(*get_interface(), get_key(), *other_.get_interface(), other_.get_key());
 			}
 			return *this;
 		}
 		AxCollectionMapItemRW& operator =(const AxCollectionMapItemRO& other_) {
 			// проверять на само-присвоение здесь не надо, т.к. AxCollectionMapItemRO это элемент другого класса - FixedMap
-			SetValue(other_.GetValue());		//TODO: здесь тоже оптимизнуть можно
+			AxCollection_ReplaceOrInsertFromGetOrUndef(*get_interface(), get_key(), *other_.get_interface(), other_.get_key());
 			return *this;
 		}
 
@@ -1127,10 +1191,10 @@ namespace esb
 		using ax_item_t = AxCollectionMapItemRW;
 		
 		value_t GetValue(ConstPara<key_t> key_) const {
-			return ax_item_t::value_getter_t::getArbitraryValueOrUndef(*this->m_interface, key_);
+			return ax_item_t::value_getter_t::GetArbitraryValueOrUndef(*this->m_interface, key_);
 		}
 		void SetValue(ConstPara<key_t> key_, ConstPara<value_t> value_) {
-			return ax_item_t::value_setter_t::setValueReplaceOrInsert(*this->m_interface, key_, value_);
+			return ax_item_t::value_setter_t::SetValueReplaceOrInsert(*this->m_interface, key_, value_);
 		}
 		ESB_PROPERTY_ARRAY_RW(value_t, Value);
 		ax_item_t operator[](Var<key_t> key_) {	// принимаем byval и далее перемещаем. при этом ключ может тихо конструироваться из любого типа (см.Var<Arbitrary>)
@@ -1151,7 +1215,7 @@ namespace esb
 		using ax_item_t = AxCollectionMapItemRO;
 
 		value_t GetValue(ConstPara<key_t> key_) {
-			return ax_item_t::value_getter_t::getArbitraryValueOrUndef(*this->m_interface, key_);
+			return ax_item_t::value_getter_t::GetArbitraryValueOrUndef(*this->m_interface, key_);
 		}
 		ESB_PROPERTY_ARRAY_RO(value_t, Value);
 		const ax_item_t  operator[](Var<key_t> key_) const {
@@ -1168,13 +1232,16 @@ namespace esb
 	// Енумератор коллекции через интерфейс (IEnumXXXX) ---------------------------------------------------------------------------------------------
 	// vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-	//TODO: Ну оочень примитивная реализация. Нужно сделать полноценный итератор плюс с возможностью обновления элемента коллекции при проходе.
+	//TOBE: Ну оочень примитивная реализация. Нужно сделать полноценный итератор плюс с возможностью обновления элемента коллекции при проходе.
 
 	template<EsbClassConcept EsbClassT>
 	class EnumeratorOf;
 
-//TODO: Операторы здесь удалены т.к. const IEnumValuesPtr& m_enumerator. Правильно сделать как в итераторе массива - указатель релиз и копия IEnumValuesPtr в дебаг.
-//		Но поскольку тут полноценно прорабатывать надо пока просто задавлю варн
+//TOBE: Операторы здесь удалены т.к. const IEnumValuesPtr& m_enumerator. Правильно сделать как в итераторе массива - в зависимости от ESB_USE_OWNING_COLLECTION_ITERATOR
+//TOBE	Также при переработке нужно учесть, что интерфейс вроде-бы позволяет делать read-write енумератор. возможно у разных классов по-разному имплементировано.
+//		Нужно разбираться..
+//TOBE	Также (возможно?) в зависимости от имплементации skip можно пытаться делать больше чем forward-only итератор. смотреть надо..
+//		поскольку тут полноценно прорабатывать надо пока просто задавлю варн
 ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEMBER()
 //
 	template<EsbClassConcept EsbClassT>
@@ -1194,16 +1261,23 @@ ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEMBER()
 	public:
 		using value_t = EsbClassT;
 		using iterator_t = EnumeratorOfIterator<value_t>;
-		value_t operator*() const {
-			//TODO: Это не очень хорошая методика - тип значения у нас проверяется каждый раз. Вообще-то его достаточно проверить один раз при присвоении
-			// (в fetch_next) и использовать не WrapRetVal, а WrapArgByRef, НО! WrapArgByRef построен на ссылке и ему нужен объект...
-			// значит нужен Var, но тогда нам нужно чтобы у value_t был конструктор от nullptr для начальной инициализации.. или че еще как... думать...!!!
-			// или базироваться на OptPtr ??, но он не унаследован от GenericValue.... ?
-			// все таки нужен некий Var класс, который может быть в том числе и в NULL-состоянии
+		//TOBE	Нужно точно проверить... в сценарии 
+		//			for (auto&& v : arr_.EnumItems())
+		//				vector_of_n.emplace_back(std::move(v).as_value<Numeric>());
+		//		Когда мы умираем должен отрабатывать этот оператор, в котором мы move-делаем требуемый тип из нашего IValuePtr (обычно Arbitrary)
+		//		этот экземпляр по универсальной ссылке передается вызывающему, у вызывающего он тоже привязывается к универсальной ссылке,
+		//		и тоже через move кастится к нужному Numeric и у целевого контейнера он помещается через move-конструктор
+		//		Т.е. не должно быть ни одного коприрования - никаких Addref/Release
+		//	!!!	Возможная проблема - после того как мы обнулили наш IValuePtr мы становимся как-бы isEOF и если нас до смерти еще кто-то проверит на ==end()
+		//		то итерация неожидаемо прервется!!! Как этого избежать?? 
+		value_t&& operator*() && {
+			return check_and_make<value_t>(std::move(m_val));
+		}
+		value_t operator*() const & {
+			// мы не кэшируем значение и проверяем (создаем) его каждый раз по требованию
 			return check_and_make_copy<value_t>(m_val);
 		}
-		// pointer operator->() const noexcept ?? - возможен только для Value\Arbitrary
-		// или если мы будем содержать в себе полное значение Var или OptPtr, а не WrapRetVal
+		// pointer operator->() const noexcept ?? - возможен только для Value/Arbitrary или если мы будем содержать в себе полное значение Var или OptPtr
 		iterator_t& operator++() {
 			fetch_next();
 			return *this;
@@ -1219,7 +1293,7 @@ ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEMBER()
 		}
 		bool operator==(const iterator_t& other_) const noexcept {
 			// равны могут быть только два итератора в состоянии EOF. иные не равны.
-			ESB_ASSERT(&m_enumerator == &other_.m_enumerator);	//мы должны ссылаться на один и тот-же енумератор.
+			assert(&m_enumerator == &other_.m_enumerator);	//мы должны ссылаться на один и тот-же енумератор.
 			return (isEOF() && other_.isEOF());
 		}
 	};
@@ -1268,6 +1342,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 	//
 	class DynamicCollectionPropertyBase {
 		// мы специально делаем св-во как отдельный объект, а не ссылку на источник чтобы св-во могло жить самостоятельно
+		//TOBE	Также надо через ESB_USE_OWNING_COLLECTION_ITERATOR делать разные варианты
 		dispid_t	m_id;	// < 0 : invalid, not found
 		IObjectPtr	m_ctx;
 	protected:
@@ -1340,7 +1415,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 	};
 
 
-	//TODO: интеллисенс не справляется с определением концепта для класса который от нас наследуется. все компилируется, но краснота раздражает...
+	//интеллисенс не справляется с определением концепта для класса который от нас наследуется. все компилируется, но краснота раздражает...
 	//template<EsbClassObject EsbObjectT, EsbClass EsbValueT>
 	template<class EsbObjectT, EsbClassConcept EsbValueT, class CollectionPropertyClassT>
 	class DynamicCollectionImplBaseT {
@@ -1433,12 +1508,6 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 	//
 	// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 	// Динамическая коллекция свойств объектного интерфейса -----------------------------------------------------------------------------------------
-
-
-
-
-
-
 
 
  } // namespace esb

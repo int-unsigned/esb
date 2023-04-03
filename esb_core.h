@@ -470,7 +470,8 @@ namespace esb {
 	IValuePtr				IValue_ToDate(IValue& val_);	//maybe nullptr	if no conversion
 	bool					IValue_IsEqualValue(IValue& value1_, IValue& value2_);
 
-	void					IVariable_SetValue(IVariable& target_, IValue& val_);
+	void					IVariable_SetValue(IVariable& target_, const IValuePtr& val_);
+	void					IVariable_SetValue(IVariable& target_, IValuePtr&& val_);
 	IValuePtr				IVariable_GetValue(const IVariable& source_);
 
 	void					IObjectMethods_InvokeAsProc(IObject& obj_, dispid_t meth_);
@@ -502,13 +503,16 @@ namespace esb {
 	bool					IEnumValues_Reset(IEnumValues& interface_);
 	bool					IEnumValues_Skip(IEnumValues& interface_, size_t n_skip_);
 
-	// интерфейсы коллекций унаследованы друг от друга, поэтому проще принимать сам интерфейс, а не его Ptr 
-	
+	// интерфейсы коллекций
 	size_t					IxCollection_Size(IIxCollectionRO& interface_);
 	IValuePtr				IxCollection_GetAt(IIxCollectionRO& interface_, size_t index_);
 	void					IxCollection_SetAt(IIxCollectionRW& interface_, size_t index_, const IVariable& value_);
+	void					IxCollection_SetAt(IIxCollectionRW& interface_, size_t index_, const IValuePtr& value_);
+	void					IxCollection_SetAt(IIxCollectionRW& interface_, size_t index_, IValuePtr&& value_);
 	void					IxCollection_Resize(IIxCollection& interface_, size_t new_size_);
 	void					IxCollection_Insert(IIxCollection& interface_, size_t at_index_, const IVariable& value_);
+	void					IxCollection_Insert(IIxCollection& interface_, size_t at_index_, const IValuePtr& value_);
+	void					IxCollection_Insert(IIxCollection& interface_, size_t at_index_, IValuePtr&& value_);
 	void					IxCollection_Remove(IIxCollection& interface_, size_t at_index_);
 	void					IxCollection_Copy(IIxCollectionRO& collection_get_, size_t index_get_, IIxCollectionRW& collection_set_, size_t index_set_);
 	void					IxCollection_Copy(IIxCollectionRW& collection_, size_t index_get_, size_t index_set_);
@@ -519,12 +523,22 @@ namespace esb {
 	IValuePtr				IValuePair_GetValue(IValuePair& interface_);
 
 	size_t					AxCollection_Size(IAxCollectionRO& interface_);
-	IValuePairPtr			AxCollection_Find(IAxCollectionRO& interface_, const IVariable& key_);
+	IValuePairPtr			AxCollection_Find(IAxCollectionRO& interface_, const IVariable& key_);		// nullptr if not found
+	IValuePairPtr			AxCollection_Find(IAxCollectionRO& interface_, const IValuePtr& key_);
 	void					AxCollection_Replace(IAxCollectionRW& interface_, const IVariable& key_, const IVariable& value_);
+	void					AxCollection_Replace(IAxCollectionRW& interface_, const IValuePtr& key_, const IValuePtr& value_);
+	void					AxCollection_Replace(IAxCollectionRW& interface_, const IValuePtr& key_, IValuePtr&& value_);
 	void					AxCollection_Insert(IAxCollection& interface_, const IVariable& key_, const IVariable& value_);
+	void					AxCollection_Insert(IAxCollection& interface_, const IValuePtr& key_, const IValuePtr& value_);
+	void					AxCollection_Insert(IAxCollection& interface_, const IValuePtr& key_, IValuePtr&& value_);
 	void					AxCollection_Remove(IAxCollection& interface_, const IVariable& key_);
+	void					AxCollection_Remove(IAxCollection& interface_, const IValuePtr& key_);
 	void					AxCollection_Clear(IAxCollection& interface_);
-
+	// специально для поддержки импелментации IAxCollection в Map: стратегия get: get-or-undef, set: replase-or-insert
+	void					AxCollection_ReplaceOrInsertFromGetOrUndef(IAxCollection& to_collection_, const IVariable& to_key_, 
+																		IAxCollectionRO& from_collection_, const IVariable& from_key_);
+	void					AxCollection_ReplaceOrInsertFromGetOrUndef(IAxCollection& to_collection_, const IValuePtr& to_key_, 
+																		IAxCollectionRO& from_collection_, const IValuePtr& from_key_);
 	String					FormatVar(const IVariable& Var_, const String& FmtString_);
 	int						collator_compare(const String& s1_, const String& s2_);
 }
@@ -940,6 +954,7 @@ namespace esb
 
 	class Arbitrary : public Value {
 		friend Arbitrary make<Arbitrary>(IValuePtr&&);
+		friend Var<Arbitrary>;
 		Arbitrary(IValuePtr&& ival_) : Value(std::move(ival_))
 		{}
 	public:
@@ -1418,7 +1433,8 @@ ESB_WARNING_RESTORE()	//disable : 4626 5027
 namespace esb 
 {
 
-ESB_WARNING_SUPRESS(ESB_WARN_NO_OPERATOR_ASSIGN_ANY ESB_WARN_NO_DEFAULT_CTOR)
+// наш базовый VarArgumentByValOnThatImpl запрещает копирование/перемещение ввиду того как... здесь давим.
+ESB_WARNING_SUPRESS(ESB_WARN_NO_OPERATOR_ASSIGN_ANY ESB_WARN_NO_DEFAULT_CTOR ESB_WARN_NO_CTOR_COPY ESB_WARN_NO_CTOR_MOVE)
 //
 	template<class EsbClassT>
 	class VarArgumentByValOnThat : public VarArgumentByValOnThatImpl<const EsbClassT> {
@@ -1681,16 +1697,60 @@ namespace esb {
 	using RuntimeInitFn = bool(void);
 	using RuntimeTermFn = void(void);
 	//
-	class RuntimeRegistratorInit : private StaticMethListBase<RuntimeRegistratorInit, RuntimeInitFn> {
-		using base_t = StaticMethListBase<RuntimeRegistratorInit, RuntimeInitFn>;
-		friend base_t;	// базовый у нас private и для того чтобы базовый мог привести свой this к нам делаем его другом
-		static inline const RuntimeRegistratorInit* root_ = nullptr;
+	class RuntimeRegistratorInit 
+	{	ESB_DECLARE_NOCOPYMOVE(RuntimeRegistratorInit);	// делаем себя некопируемым, т.к. нам не нужны двойные инит
+
+		static inline RuntimeRegistratorInit*	root_ = nullptr;
+		static inline RuntimeRegistratorInit*	last_ = nullptr;
+		RuntimeInitFn*							meth_;
+		RuntimeRegistratorInit*					next_;
+		static RuntimeRegistratorInit* find_meth(RuntimeInitFn& fn_) {
+			RuntimeRegistratorInit* it = root_;
+			while (it) {
+				if (it->meth_ == fn_)
+					return it;
+				it = it->next_;
+			}
+			return nullptr;
+		}
+		static RuntimeRegistratorInit* find(const RuntimeRegistratorInit& it_) {
+			RuntimeRegistratorInit* it = root_;
+			while (it) {
+				if (it == &it_)
+					return it;
+				it = it->next_;
+			}
+			return nullptr;
+		}
 	public:
+		static const RuntimeRegistratorInit* root()						{ return root_; }
+		static const RuntimeRegistratorInit* last()						{ return last_; }
+		static const RuntimeRegistratorInit* find(RuntimeInitFn& fn_)	{ return find_meth(fn_); }
 		// мы инициализируем элемент списка ссылкой, поэтому в дальнейшем можем не бояться что там нулл
-		RuntimeRegistratorInit(RuntimeInitFn& fn_) : base_t{ fn_ }
-		{}
-		// делаем себя некопируемым, т.к. нам не нужны двойные инит
-		ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(RuntimeRegistratorInit);
+		RuntimeRegistratorInit(RuntimeInitFn& fn_) : meth_(fn_), next_(root_) {
+			root_ = this;
+			if (!last_) last_ = this;
+		}
+		RuntimeRegistratorInit(const RuntimeRegistratorInit* after_, RuntimeInitFn& fn_) : meth_(fn_)
+		{
+			if (after_) {
+				RuntimeRegistratorInit* it_after;	// в дебаге мы проверим чтобы after_ был валидным членом нашего списка, а в релизе просто откастим
+#ifdef NDEBUG
+				it_after = const_cast<RuntimeRegistratorInit*>(after_);
+#else
+				it_after = find(*after_);
+				assert(it_after);
+#endif
+				next_ = it_after->next_;
+				it_after->next_ = this;
+			}
+			else {	//assume root
+				next_ = root_;
+				root_ = this;
+			}
+
+			if (last_ == after_) last_ = this;	// в любом случае: если after_ был последним или если after_ был нулл то мы встали в руут и ласт тоже становим в нас
+		}
 		// проход по всему списку инициализации прерывается если только хоть один метод неуспешен
 		static bool do_all() {
 			const RuntimeRegistratorInit* it = root_;
@@ -1729,6 +1789,7 @@ namespace esb {
 
 	template<class EnumClassType>
 	class TypeDefStaticEnum : public TypeDefStatic {
+		ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeDefStaticEnum);
 		friend bool OnComponentInitStartup();
 		bool init() const;
 	public:
@@ -1902,16 +1963,30 @@ ESB_DETECT_MISMATCH(ESB_DISP_TERM_NAMES_COUNT)
 	using DispInvokeStatPropSetFn	= void(const IVariable&);
 
 
+
+	//NOTE	Если основывать битпак на uint64_t, то он получает выравнивание 8 и структурах DispInfo(Stat|Memb)Meth получаются паддинги. Несмертельно, но неприятно
+	//		В 64-битном варианте само пройдет.
+	//TOBE	Также можно поменять алгоритм на использование uint32_t[2], но думаю это стоит делать если еще какие вопросы/проблемы проявятся.
+	//		Этот "битпак" сам по себе сомнителен.. Может еще para_is_out делать придется..
 	struct DispMethInfo {
-		using bitpack_t = uint64_t;
-		bitpack_t	data_;
 		//    6         5         4         3         2         1
 		// 3210987654321098765432109876543210987654321098765432109876543210
 		//                   opts-in-reverse-order                  R*count
-#define ESB_METHINFO_DATA_BITS		64
-#define ESB_METHINFO_SIZE_BITS		6
+#if ESB_POINTER_SIZE == 4
+		using bitpack_t = uint32_t;
+#		define ESB_METHINFO_DATA_BITS		32
+#		define ESB_METHINFO_SIZE_BITS		5
+		// может быть всего 31 параметра из которых последние 26 могут быть опт. или для метода со всеми опт параметрами возмажно максимум 26 параметров
+#elif ESB_POINTER_SIZE == 8
+		using bitpack_t = uint64_t;
+#		define ESB_METHINFO_DATA_BITS		64
+#		define ESB_METHINFO_SIZE_BITS		6
 		// может быть всего 63 параметра из которых последние 57 могут быть опт. или для метода со всеми опт параметрами возмажно максимум 57 параметров
 		// (возможные варианты 15:32767-48; 7:127-56; 6:63-57)
+#else
+#	error ESB_POINTER_SIZE not defined or have wrong value/
+#endif
+		bitpack_t	data_;
 ESB_WARNING_SUPRESS(ESB_WARN_DETECT_MISMATCH_IN_SCOPE)
 ESB_CHECK_AND_DETECT_MISMATCH(ESB_METHINFO_DATA_BITS, (sizeof(bitpack_t)* CHAR_BIT))
 ESB_DETECT_MISMATCH(ESB_METHINFO_SIZE_BITS)
@@ -2064,6 +2139,7 @@ namespace esb {
 
 
 	struct ExtValueObjectBase : public ExtValueBase, public IObject {
+		ESB_DECLARE_NOCOPYMOVE(ExtValueObjectBase);
 		// implementation
 		template<class ExtDataT>
 		inline ExtDataT& GetContainedData();
@@ -2374,6 +2450,13 @@ namespace esb // DelagatToMeth support
 
 
 
+	//esbhlp
+	//	Это функции для регистрации типа делегат-на-метод в платформе 1С для возможности создавать делегаты в коде 1С с помощью Новый(...)
+	//	(используются по желанию)
+	extern bool ExtRegisterDelegatToMeth();
+	extern bool ExtRevokeDelegatToMeth();
+
+	// Сам себе и TypeDef и дескриптор
 	class TypeDefDelegatToMeth : public TypeDef {
 		friend class DelegatToMeth;
 	protected:
@@ -2439,14 +2522,14 @@ namespace esb // DelagatToMeth support
 			if (TypeText_)
 				TypeText_ = nullptr;
 		}
+	public:
+		static bool ExtRegisterType() {
+			return ExtRegisterDelegatToMeth();
+		}
+		static bool ExtRevokeType() {
+			return ExtRevokeDelegatToMeth();
+		}
 	};
-
-
-	//esbhlp
-	//	Это функции для регистрации типа делегат-на-метод в платформе 1С для возможности создавать делегаты в коде 1С с помощью Новый(...)
-	//	(используются по желанию)
-	extern bool ExtRegisterDelegatToMeth();
-	extern bool ExtRevokeDelegatToMeth();
 
 
 	class DelegatToMeth : public esb::Object
@@ -2487,10 +2570,9 @@ namespace esb // DelagatToMeth support
 			return make<DelegatToMeth>(IValuePtr{ TypeObj_.CreateValueInstance(std::move(obj) , meth_) });
 		}
 #endif //#if ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK
-	//protected:	TODO
-	public:
+	protected:
 		//INFO	Метод не публичный чтобы навязать использование какого-то конкретного класса-наследника в котором Invoke определен с конкретной необходимой сигнаурой. 
-		//		К примеру для предикатк сортировки чисел что-то типа:
+		//		К примеру для предиката сортировки чисел что-то типа:
 		//		class ComparatorForNumeric : public DelegatToMeth { bool operator()(const Numeric&, const Numeric&) { return DelegatToMeth::Invoke(...);  }  };
 		template<class RetT, class... ArgsT>
 		RetT Invoke(const ArgsT&... args_) const {

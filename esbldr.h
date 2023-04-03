@@ -141,7 +141,14 @@ public:
 		AppConnect_ = (IAddInDefBase*)pv_;
 		if (!AppConnect_) return false;
 
-		return esb::OnComponentInitStartup();
+		if(esb::OnComponentInitStartup())
+			return true;
+
+		// NOTE
+		// если инициализация есб не удалась, то мы принудительно почистим за собой то, что получилось сделать и вернем неуспех.
+		// (АПИ esbhlp устроено по принципу as-min-as-possible с целью возможной корректировки логики поведения в приложении.)
+		esb::OnComponentDoneCleanup();
+		return false;
 	}
 	virtual bool ADDIN_API setMemManager(void* pv_) override final {
 		AppMemoryManager_ = (IMemoryManager*)pv_;

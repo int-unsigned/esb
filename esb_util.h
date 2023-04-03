@@ -58,8 +58,7 @@
 
 
 constexpr bool is_power_of_2(size_t value_) {
-	//return value_ > 0 && !(value_ & (value_ - 1));
-	return value_ != 0 && (value_ & (value_ - 1)) == 0;	//у мс так сделано
+	return value_ != 0 && (value_ & (value_ - 1)) == 0;
 }
 constexpr size_t round_up(size_t size_, size_t align_) {
 	assert(is_power_of_2(align_));
@@ -131,7 +130,7 @@ constexpr inline wchar_t to_nocase(wchar_t wch_) {
 
 
 
-//ТУДУ: свернуть до итераторов-аццессоров <as-is>\<to_nocase>\<etc...>. Лентяй!
+//TODO: свернуть до итераторов-аццессоров <as-is>\<to_nocase>\<etc...>. Лентяй!
 
 consteval int consteval_cstr_compare_as_is(const wchar_t* ps1_, const wchar_t* ps2_) {
 	//assume zero terminated && not null
@@ -156,7 +155,7 @@ consteval int consteval_cstr_compare_as_is(const wchar_t* ps1_, const wchar_t* p
 	}
 }
 
-//ТУДУ: cstr_compare_nocase_xxcase и сstr_equal_nocase_xxcase используются и в рантайме. для рантайма можно и более эффективный алгоритм подумать.
+//TODO: cstr_compare_nocase_xxcase и сstr_equal_nocase_xxcase используются и в рантайме. для рантайма можно и более эффективный алгоритм подумать.
 //		тем более что для pstr1_nocase_ у нас известна длина
 
 constexpr int cstr_compare_nocase_xxcase(const wchar_t* pstr1_nocase_, const wchar_t* pstr2_xxcase_) {
@@ -288,7 +287,7 @@ constexpr size_t array_find_binary(const ElemT(&arr_)[NSize], const ValT& val_, 
 	return notfound_;
 }
 
-//ТУДУ: Убей бог непомню почему откопипастил. Что-то неполучалось.. Нужно разобраться. А лучше бы стд работало...
+//TODO: Убей бог непомню почему откопипастил. Что-то неполучалось.. Нужно разобраться. А лучше бы стд работало...
 template<class ElemT, size_t NSize, class ValT, class CompT>
 constexpr size_t array_find_binary(const std::array<ElemT, NSize>& arr_, const ValT& val_, CompT comp_, size_t notfound_ = ARRAY_FIND_BINARY_NOT_FOUND) {
 	int i_min = 0;				// int - это очень!!!
@@ -330,7 +329,7 @@ namespace esb {
 		struct size : std::integral_constant<size_t, 0>{};
 	};
 	template<class ThisT, class... RestT>
-	class typepack<ThisT, RestT...> //: private typepack<RestT...>
+	class typepack<ThisT, RestT...>
 	{
 		template<size_t IndexN, class... Ts>						struct _item;
 		template<size_t IndexN, class TsHead, class... TsTail>		struct _item<IndexN, TsHead, TsTail...> : _item<IndexN - 1, TsTail...> {};
@@ -423,6 +422,7 @@ protected:
 	//static const me_t*	root_;		из-за warning C4356: "static data member cannot be initialized via derived class" root_ нужно объявлять в StaticMethListT
 	meth_t*				meth_;
 	const me_t*			next_;
+	//me_t* next_;
 protected:
 	StaticMethListBase(nullptr_t) : meth_(nullptr), next_(StaticMethListT::root_) {
 		StaticMethListT::root_ = static_cast<me_t*>(this);
@@ -444,6 +444,10 @@ struct MemberMethInvoker {
 	}
 };
 
+template<auto Meth>
+struct VoidifyInvoker {
+	static void invoke() { Meth(); }
+};
 
 
 
@@ -530,11 +534,11 @@ inline bool is_equal_guid(REFGUID a_, REFGUID b_)
 
 consteval uint8_t from_hex(const char ch_) {
 	if ((ch_ >= 'a') && (ch_ <= 'f'))
-		return (ch_ - 87);
+		return static_cast<uint8_t>(ch_ - 87);
 	else if ((ch_ >= 'A') && (ch_ <= 'F'))
-		return (ch_ - 55);
+		return static_cast<uint8_t>(ch_ - 55);
 	else if ((ch_ >= '0') && (ch_ <= '9'))
-		return (ch_ - '0');
+		return static_cast<uint8_t>(ch_ - '0');
 	else
 		throw std::exception{};
 }
@@ -575,8 +579,8 @@ static_assert(is_equal_guid_asis(guid_from_hex("18EBBE5A-080E-4E0A-B181-1C58F854
 #if defined(ESB_USE_DETOUR) && ESB_USE_DETOUR
 // В свойства проекта добавить пути к папке с ms-detours
 
-#include "detours/include/detours.h"
-#pragma comment( lib , "detours/lib.X86/detours.lib")
+#include ESB_DETOUR_INCLUDE
+#pragma comment( lib , ESB_DETOUR_LIB )
 
 // Класс упрощает установку перехвата для одной функции. В конструкторе перехват устанавливается, а в деструкторе синимается.
 // В качестве метода-перегрузки может принимать лямбду

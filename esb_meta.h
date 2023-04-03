@@ -102,14 +102,14 @@ namespace esb // esb-meta
 		static constexpr std::wstring_view	TypeDescriptionInit_{ ESB_T(TEXT_) };
 
 
-#define ESB_INTERFACEDEF_DESCRIPTOR_T(CLASS_T_)		interface_info_t<CLASS_T_>::descriptor_t
+#define ESB_INTERFACEDEF_DESCRIPTOR_T(CLASS_T_)		esb::interface_info_t<CLASS_T_>::descriptor_t
 
 
 
 	template<class ExtObjectT> consteval bool dispinterface_check();
 
 #define ESB_INTERFACEDEF_DONE(CLASS_T_)		\
-	};	static_assert(dispinterface_check< interface_info_t<CLASS_T_>::descriptor_t::interface_t > () == true, "invalid dispinterface for " #CLASS_T_ )
+	};	static_assert(dispinterface_check< esb::interface_info_t<CLASS_T_>::descriptor_t::interface_t > () == true, "invalid dispinterface for " #CLASS_T_ )
 
 
 #define ESB_INTERFACEDEF_OBJECT_STABLE(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)					\
@@ -211,15 +211,14 @@ namespace esb // esb-meta
 		using const_func_t = typename RetTypeT(ClassTypeT::*)(ParamTypesT...) const;
 
 		template<size_t... _Ix>
-		static void do_invoke(class_t& inst_, func_t func_, IVariable* ret_, const argpack_t& args_, std::index_sequence<_Ix...>) {
+		static void do_invoke(class_t& inst_, func_t func_, ESB_UNUSED IVariable* ret_, const argpack_t& args_, std::index_sequence<_Ix...>) {
 			if constexpr (base_t::is_proc_) {
 				assert(ret_ == nullptr);
 				(inst_.*func_)(check_and_make_from_var_ex<std::remove_cvref_t<ParamTypesT>>(args_[_Ix])...);
 			}
 			else {
-				assert(ret_ != nullptr);
 				typename base_t::ret_t res = (inst_.*func_)(check_and_make_from_var_ex<std::remove_cvref_t<ParamTypesT>>(args_[_Ix])...);
-				IVariable_SetValue(*ret_, *get_interface(res));
+				internal::variable_set_value(ret_, std::move(res));
 			}
 		}
 		template<size_t... _Ix>
@@ -229,27 +228,27 @@ namespace esb // esb-meta
 				(inst_.*func_)(check_and_make_from_var_ex<std::remove_cvref_t<ParamTypesT>>(args_[_Ix])...);
 			}
 			else {
-				assert(ret_ != nullptr);
 				typename base_t::ret_t res = (inst_.*func_)(check_and_make_from_var_ex<std::remove_cvref_t<ParamTypesT>>(args_[_Ix])...);
-				IVariable_SetValue(*ret_, *get_interface(res));
+				internal::variable_set_value(ret_, std::move(res));
 			}
 		}
 	};
+
+
 	template<typename RetTypeT, typename ... ParamTypesT>
 	struct InvokerImpl<void, RetTypeT, ParamTypesT...> : public InvokerImplBase<RetTypeT, ParamTypesT...> {
 		using base_t = InvokerImplBase<RetTypeT, ParamTypesT...>;
 		using class_t = void;
 		using func_t = typename RetTypeT(ParamTypesT...);
 		template<size_t... _Ix>
-		static void do_invoke(func_t func_, IVariable* ret_, const argpack_t& args_, std::index_sequence<_Ix...>) {
+		static void do_invoke(func_t func_, ESB_UNUSED IVariable* ret_, const argpack_t& args_, std::index_sequence<_Ix...>) {
 			if constexpr (base_t::is_proc_) {
 				assert(ret_ == nullptr);
 				func_(check_and_make_from_var_ex<std::remove_cvref_t<ParamTypesT>>(args_[_Ix])...);
 			}
 			else {
-				assert(ret_ != nullptr);
 				typename base_t::ret_t res = func_(check_and_make_from_var_ex<std::remove_cvref_t<ParamTypesT>>(args_[_Ix])...);
-				IVariable_SetValue(*ret_, *get_interface(res));
+				internal::variable_set_value(ret_, std::move(res));
 			}
 		}
 	};
@@ -269,7 +268,7 @@ namespace esb // esb-meta
 		static void invoke_as_prop_get(base_t::func_t func_, IVariable& retval_) {
 			static_assert(base_t::has_retval_ && base_t::param_count_ == 0, "invalid get property value method signature: expected function with no arguments.");
 			typename base_t::ret_t res = func_();
-			IVariable_SetValue(retval_, *get_interface(res));
+			internal::variable_set_value(retval_, std::move(res));
 		}
 		static void invoke_as_prop_set(base_t::func_t func_, const IVariable& newval_) {
 			static_assert(base_t::is_proc_ && base_t::param_count_ == 1, "invalid set property value method signature: expected procedure with 1 argument.");
@@ -305,8 +304,10 @@ namespace esb // esb-meta
 		}
 		static void invoke_as_prop_get(const base_t::class_t& inst_, base_t::const_func_t func_, IVariable& retval_) {
 			static_assert(base_t::has_retval_ && base_t::param_count_ == 0, "invalid get property value method signature: expected function with no arguments.");
+			//TOBE	после внедрения variable_set_value везде в таком виде - сначала res, а потом мув его. Нужно почиститься.
+			//		Также если RetTypeT неподдерживается нужно сделать static_assert с толковым объяснением проблемы (у InvokerImpl разом на всех)
 			typename base_t::ret_t res = (inst_.*func_)();
-			IVariable_SetValue(retval_, *get_interface(res));
+			internal::variable_set_value(retval_, std::move(res));
 		}
 	};
 
@@ -409,16 +410,21 @@ namespace esb // esb-meta
 	template<typename T>
 	concept MetaInterfaceMethConcept = is_meta_interface_meth<T>;
 
+	//NOTE
+	// Если делать этот метод consteval, то утыкаемся в ограничение компилятора (MSVC 16.11.19)
+	// fatal error C1054: ограничение компилятора: недопустимая степень вложения инициализаторов. Максимум 10-15. Реально 11.
+	// workaround: делать InterfaceMethMeta1_, InterfaceMethMeta2_, ... и
+	// InterfaceMethMeta_ = std::tuple_cat(InterfaceMethMeta1_, InterfaceMethMeta2_, ...)
+	// Или сделать функцию не consteval, а constexpr
+	//TOBE	Также можно подумать над генерацией дисп-интерфейса напрямую минуя стадию мета-интерфейса
+	// В конечном итоге нам нужен именно дисп, а мета используется как промежуточное. 
+	// Модель мета-интерфейса и дисп-интерфейс из него представляется красивой и очень соблазнительно дотянуть до когда у с++ появится std::meta...
 	template<MetaInterfaceMethConcept... MethT>
-	consteval auto make_meta_interface_meth(MethT&&... args_) {
+	constexpr auto make_meta_interface_meth(MethT&&... args_) {
 		return std::make_tuple(std::forward<MethT>(args_)...);
 	}
 
 	// Макрос упрощающий создание списка методов. Аргументы - макросы ESB_META_INTERFACE_xxx_METH. в конце требует ;
-	// TOBE В процессе оказалось, что компилятор (MSVC 16.11.19) позволяет только ограниченное количество элементов инициализатора ... для make_meta_interface_meth(...) - ~10-15
-	//		Поэтому приходится изобретать некрасивое (см. демо) вроде InterfaceMethMeta1_ = .., InterfaceMethMeta2_= .., ... 
-	//		и потом static constexpr auto InterfaceMethMeta_ = std::tuple_cat(InterfaceMethMeta1_, InterfaceMethMeta2_, ...);
-	//		Возможно можно попробовать решить эту проблему с помощью "хитрых" макросов. Не уверен.. можно-ли.. нужно-ли..
 #define ESB_META_INTERFACE_METH(...)	static constexpr auto ESB_INTERFACE_METH_META_FIELD = make_meta_interface_meth (__VA_ARGS__ )
 
 
@@ -513,7 +519,7 @@ namespace esb // esb-meta
 	concept MetaInterfacePropConcept = is_meta_interface_prop<T>;
 
 	template<MetaInterfacePropConcept... PropT>
-	consteval auto make_meta_interface_prop(PropT&&... args_) {
+	constexpr auto make_meta_interface_prop(PropT&&... args_) {
 		return std::make_tuple(std::forward<PropT>(args_)...);
 	}
 
@@ -542,7 +548,7 @@ namespace esb // esb-meta
 
 
 	template<MetaInterfaceCtorConcept... CtorMetaT>
-	consteval std::tuple<CtorMetaT...> make_meta_interface_ctor(CtorMetaT&&... args_) {
+	constexpr std::tuple<CtorMetaT...> make_meta_interface_ctor(CtorMetaT&&... args_) {
 		return std::make_tuple(std::forward<CtorMetaT>(args_)...);
 	}
 	template<class ExtValueDataT>

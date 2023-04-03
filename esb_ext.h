@@ -383,6 +383,18 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY
 		explicit operator contained_t&& () &&			{ return descriptor_t::GetContained(*this); }
 	};
 
+	template<class T>
+	inline constexpr bool is_contained_has_DataType = requires {typename T::DataType; };
+	template<class T, bool>
+	struct ext_contained_DataType {
+		using type = void;
+	};
+	template<class T>
+	struct ext_contained_DataType<T, true> {
+		using type = T::DataType;
+	};
+	template<class T>
+	using ext_contained_DataType_t = ext_contained_DataType<T, is_contained_has_DataType<T>>::type;
 
 	template<class ExtObjectT>
 	class ExtValueObjectValue : public esb::Object
@@ -392,6 +404,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY
 		using contained_t = ExtObjectT;
 		using descriptor_t = interface_info_t<contained_t>::descriptor_t;
 		using typedef_t = ExtTypeDef<descriptor_t>;
+		using ContainedDataType = ext_contained_DataType_t<contained_t>;
 	private:
 		ESB_CLASS_IMPLEMENT_MAKE_OBJ(ExtValueObjectValue)
 		ESB_CLASS_IMPLEMENT_MAKE_OPT(ExtValueObjectValue)
@@ -465,7 +478,64 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY
 	ESB_VALUEDEF(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_);						\
 	ESB_INTERFACEDEF_FACTORY_INSTANCE(CLASS_T_)
 
+
+template<class EsbExtEntityT>
+class ExtEntityRegistrator {
+	using entity_t = EsbExtEntityT;
+	using typedef_t = entity_t::typedef_t;
+	using factory_t = ExtTypeFactoryImplementation<typedef_t>;
+	//NOTE	Поскольку сам тип в среде 1С должен быть зарегисирирован ПОСЛЕ инициализации его дескриптора, а порядок инициализации статических
+	//		переменных у с++ неопределен, то инит дескриптора помещяется в голову списка, а регистратор в хвост. Таким образом всегда,
+	//		при любой последовательности инициализации статик-регистраторов инит-дескриптора предшествует регистрации типа в платформе
+	static inline const RuntimeRegistratorInit on_runtime_init_{ RuntimeRegistratorInit::last(), factory_t::RegisterType };
+	//NOTE	Нам можно не увязывать дерегистрацию с успешностью регистрации, т.к. если список регистрации не будет успешно
+	//		выполнен до конца, то загрузка будет просто прервана.
+	//		А процедура дерегистрации (OnComponentInitCleanup) выписана так чтобы быть no-error - учитывает варианты аварийной выгрузки.
+	//		дерегистрация ни с чем не связана, поэтому просто кладем в голову.
+	static inline const RuntimeRegistratorTerm on_runtime_term_{ VoidifyInvoker<factory_t::RevokeType>::invoke };
+	// наши инстансы on_runtime_... static inline, но компилятор не хочет их делать если как-то не его не попросить. просим сделать фейковую инстанс этого класса
+	// (оптимизатор ее все равно вырезает, а static inline on_runtime_... остаются.
+	static const ExtEntityRegistrator Instance_;
+};
+
+#define ESB_VALUEDEF_WITH_FACTORY_AND_REG(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)		\
+	ESB_VALUEDEF_WITH_FACTORY(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_);					\
+	inline const ExtEntityRegistrator<ESB_NAME_> ExtEntityRegistrator<ESB_NAME_>::Instance_{}
+
+
+#define ESB_INTERFACEDEF_DONE_WITH_VALUE_AND_FACTORY(CLASS_T_, ESB_NAME_)	\
+	ESB_INTERFACEDEF_DONE(CLASS_T_);	\
+	using ESB_NAME_ =  ESB_INTERFACEDEF_VALUE_T(CLASS_T_);	\
+	ESB_INTERFACEDEF_FACTORY_INSTANCE(CLASS_T_)
+
+#define ESB_INTERFACEDEF_DONE_WITH_VALUE_AND_FACTORY_REG(CLASS_T_, ESB_NAME_)	\
+	ESB_INTERFACEDEF_DONE_WITH_VALUE_AND_FACTORY(CLASS_T_, ESB_NAME_);	\
+	inline const ExtEntityRegistrator<ESB_NAME_> ExtEntityRegistrator<ESB_NAME_>::Instance_{}
+
+
+// Специфический авто-типа-регистратор для DelegatToMeth
+// Поскольку это уже полностью специализированный тип мы не можем делать поля on_runtime_init_/on_runtime_term_ static inline
+// т.к. компилятор их тогда инициализирует сразу без нашего ведома.
+// Мы сделаем эти поля полями экземпляра и будем при необходимости делать inline Instance_ этого класса
+// Тогда on_runtime_init_/on_runtime_term_ будут проинициализированы в конструкторе этой Instance_
+// Обращаю внимание, что и конструктор и Instance_ приватны - можно создать только один экземпляр этой специализации 
+// (RuntimeRegistratorInit/RuntimeRegistratorTerm некопируемы)
+template<>
+class ExtEntityRegistrator<DelegatToMeth> {
+	const RuntimeRegistratorInit on_runtime_init_;
+	const RuntimeRegistratorTerm on_runtime_term_;
+	ExtEntityRegistrator() : on_runtime_init_{ RuntimeRegistratorInit::last(), TypeDefDelegatToMeth::ExtRegisterType },
+		on_runtime_term_{ VoidifyInvoker<TypeDefDelegatToMeth::ExtRevokeType>::invoke }
+	{}
+	static const ExtEntityRegistrator Instance_;
+};
+#define ESB_REGISTER_AUTO_DELEGAT_TO_METH()	\
+	inline const ExtEntityRegistrator<DelegatToMeth> ExtEntityRegistrator<DelegatToMeth>::Instance_{}
+
+
 } //namespace esb-ext
 
-#endif
+
+
+#endif	//ESB_EXT_H
 
