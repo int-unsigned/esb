@@ -25,7 +25,6 @@ ESBLIB_ENUM(SortDirection,		SortDirection)		//EnumValue && EnumSelf
 ESBLIB_ENUM(RoundMode,			RoundMode)			//EnumValue && EnumSelf
 ESBLIB_TYPE(ErrorInfoValue,		BSLException)
 //
-//ESBLIB_TYPE(CommonModule,		CommonModule)//mngcore
-//
+
 #undef ESBLIB_TYPE
 #undef ESBLIB_ENUM

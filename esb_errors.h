@@ -1,4 +1,14 @@
-﻿#pragma once
+﻿/*
+	"ESB" is designed to create external native components for the 1C(tm) program.
+	Copyright © 2023 IntUnsigned	(v8classes@gmail.com)
+	"ESB" is free software under LGPLv2.1 license with essential restriction about binary part (view esb-license.txt)
+	"ESB" IS DISTRIBUTED "AS-IS" WITHOUT ANY, EVEN THE IMPLIED, WARRANTY. IN NO EVENT SHALL THE AUTHORS OR THE COPYRIGHT OWNER BE LIABLE FOR ANY CLAIM, 
+	DAMAGES OR OTHER LIABILITY ARISING OUT OF THE USE OF THIS SOFTWARE.
+	THE AUTHOR DOES NOT GIVE ANY GUARANTEES AND DOES NOT BEAR ANY RESPONSIBILITY REGARDING THE USE OF 1C(tm) COMPONENTS PRODUCED USING THE ESB LIBRARY IN THE 1C(tm) ENVIRONMENT.
+*/
+
+
+#pragma once
 #ifndef __ESB_ERRORS_H__
 #define __ESB_ERRORS_H__
 
@@ -74,7 +84,7 @@
 #define ESL_THROW_NOT_OBJECT_PROP_GET()		ESL_THROW(ESL_T("\u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u043E\u0431\u044A\u0435\u043A\u0442\u0430 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u043E."))
 //Значение свойству объекта не присвоено.
 #define ESL_THROW_NOT_OBJECT_PROP_SET()		ESL_THROW(ESL_T("\u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0443 \u043E\u0431\u044A\u0435\u043A\u0442\u0430 \u043D\u0435 \u043F\u0440\u0438\u0441\u0432\u043E\u0435\u043D\u043E."))
-//TODO: UNEXPECTED? вызов известных методов для известных объектов всегда должен быть успешен
+//UNEXPECTED? вызов известных методов для известных объектов всегда должен быть успешен
 //Вызов функции объекта не выполнен.
 #define ESL_THROW_CALL_OBJECT_FUNC_FAILED()	ESL_THROW(ESL_T("\u0412\u044B\u0437\u043E\u0432 \u0444\u0443\u043D\u043A\u0446\u0438\u0438 \u043E\u0431\u044A\u0435\u043A\u0442\u0430 \u043D\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D."))
 //Вызов процедуры объекта не выполнен.
