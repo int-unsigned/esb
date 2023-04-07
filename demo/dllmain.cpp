@@ -751,7 +751,10 @@ void SaveResultsToFile(const Array& results_array_) {
 		String tag = s.GetTAG();
 		write_to_bb(tag.view());
 		write_to_bb(L"\t");
-		std::wstring val = std::to_wstring(AsUnsignedOrThrow(s.GetVAL()));
+		signed ival = static_cast<signed>(s.GetVAL());
+		if (ival < 0)
+			ESL_THROW_UNEXPECTED();
+		std::wstring val = std::to_wstring( static_cast<unsigned>(ival) );
 		write_to_bb(val);
 		write_to_bb(L"\n");
 	}

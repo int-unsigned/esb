@@ -216,14 +216,14 @@ namespace esb {
 
 	template<class IntegerT>
 	inline IntegerT ToIntegerOrThrow(const Numeric& value_) {
-		Numeric::to_integer_t i = ToIntegerOrThrow<int64_t>(value_);
+		Numeric::to_integer_t i = ToIntegerOrThrow<Numeric::to_integer_t>(value_);
 		if (i >= std::numeric_limits<IntegerT>::min() && i <= std::numeric_limits<IntegerT>::max())
 			return static_cast<IntegerT>(i);
 		throw_error_integer_overflow<IntegerT>();
 	}
 
-	inline unsigned AsUnsignedOrThrow(const Numeric& value_) {
-		return ToIntegerOrThrow<unsigned>(value_);
+	inline unsigned int AsUnsignedOrThrow(const Numeric& value_) {
+		return ToIntegerOrThrow<unsigned int>(value_);
 	}
 
 	inline size_t AsIndex(const Numeric& value_, size_t size_) {
