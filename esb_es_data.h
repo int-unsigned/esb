@@ -712,16 +712,25 @@ public:
 
 // определение АПИ зависящего от типов esb_data
 //
+#if ESB_API_INCLUDE_backend
 // Функция НайтиПоСсылкам(СписокСсылок_ Как Массив, ОбластьПоиска_ Как Массив, ВключитьОбъекты_ Как Массив, ИсключитьОбъекты_ Как Массив) Возвращает ТаблицаЗначений
 inline ValueTable FindByRef(ConstPara<Array> ReferenceList_, ConstPara<Array> SearchArea_ /*= DefUndef<Array>*/, ConstPara<Array> IncludeObjects_ /*= DefUndef<Array>*/, ConstPara<Array> ExcludeObjects_ /*= DefUndef<Array>*/) { ESB_INVOKE_API_FUNC4(ValueTable, backend, 6, ReferenceList_, SearchArea_, IncludeObjects_, ExcludeObjects_); }
 // Функция ПолучитьСтруктуруХраненияБазыДанных(ОбъектыМетаданных_ Как Массив, ИменаБазыДанных_ Как Булево) Возвращает ТаблицаЗначений
 inline ValueTable GetDBStorageStructureInfo(ConstPara<Array> MetadataObjects_, ConstPara<Boolean> DBMSNames_ /*= DefUndef<Boolean>*/) { ESB_INVOKE_API_FUNC2(ValueTable, backend, 45, MetadataObjects_, DBMSNames_); }
+#endif	//ESB_API_INCLUDE_backend
+
+#if ESB_API_INCLUDE_frntend
 // Функция ПользователиWindows() Возвращает [ТаблицаЗначений,Массив]
 inline ClassMix<ValueTable, Array> WindowsUsers() { ESB_INVOKE_API_FUNC0(ESB_MIX2(ValueTable, Array), frntend, 29); }
 // Функция ПользователиОС() Возвращает [ТаблицаЗначений,Массив]
 inline ClassMix<ValueTable, Array> OSUsers() { ESB_INVOKE_API_FUNC0(ESB_MIX2(ValueTable, Array), frntend, 30); }
+#endif
+
+#if ESB_API_INCLUDE_mngbase
 // Функция ПолучитьДанныеВыбора(ТипЗначения_ Как Тип, Параметры_ Как Структура) Возвращает СписокЗначений
 inline ValueList GetChoiceData(ConstPara<TypeValue> ValueType_, ConstPara<Structure> Parameters_) { ESB_INVOKE_API_FUNC2(ValueList, mngbase, 9, ValueType_, Parameters_); }
+#endif
+//
 /////////////////////////////////////////////////
 
 

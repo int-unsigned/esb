@@ -17,13 +17,66 @@
 
 
 namespace esb {
-//
+	//
 	class Stream;
 	class BinaryData;
 	class BinaryDataBuffer;
 	class FileStream;
 	class MemoryStream;
-//
+	//
+
+	namespace _internal{
+		namespace _1c_dispinfo {
+			namespace _v8300 {
+				template<class>
+				struct MethIdsFor;
+				template<>
+				struct MethIdsFor<Stream> {
+					enum _ids_enum : dispix_t {
+						Close, Size, GetReadOnlyStream, CurrentPosition, CopyTo, Flush, Seek, SetSize, Read, Write,
+						BeginGetSize, BeginCopyTo, BeginSeek, BeginSetSize, BeginRead, BeginWrite, BeginFlush,
+						BeginClose,
+					};
+				protected:
+					static constexpr dispix_t _ids_enum_last = _ids_enum::BeginClose;
+				};
+			}
+			namespace _v8318 {
+				//TODO:	Как-то коряво волучается - MethIdsFor в каждом отдельном namespace v.... 
+				//		Но иначе error C2888 - специализация может быть только в том-же или окружающем пространстве.
+				//		т.е. объявляя MethIdsFor в _1c_dispinfo я специализировать его могу только в _1c_dispinfo или выше в _internal, т.п.
+				template<class>
+				struct MethIdsFor;
+				template<>
+				struct MethIdsFor<Stream> {
+					enum _ids_enum : dispix_t {
+						Close, Size, GetReadOnlyStream, CurrentPosition, CopyTo, Flush, Seek, SetSize, Read, Write,
+						BeginGetSize, SizeAsync, BeginCopyTo, CopyToAsync, BeginSeek, SeekAsync, BeginSetSize, SetSizeAsync, BeginRead, ReadAsync, BeginWrite, WriteAsync, BeginFlush,
+						FlushAsync, BeginClose,
+						CloseAsync,
+					};
+				protected:
+					static constexpr dispix_t _ids_enum_last = _ids_enum::CloseAsync;
+				};
+			}
+#if ESB_VER < ESB_VER_v8318
+			using namespace _v8300;
+#elif ESB_VER <= ESB_VER_v8323
+			using namespace _v8318;
+#endif
+
+			template<>
+			struct MethIdsFor<FileStream> : public MethIdsFor<Stream> {};
+			template<>
+			struct MethIdsFor<MemoryStream> : public MethIdsFor<Stream> {
+				static constexpr const dispix_t CloseAndGetBinaryData = _ids_enum_last + 1;
+			};
+		} // namespace esb::_internal::_1c_dispinfo
+	} // namespace esb::_internal
+
+#define ESB_DECLARE_DISPIDS_METH(CLASS_)		using MethId = _internal::_1c_dispinfo::MethIdsFor<CLASS_>
+
+
 
 	//TOBE:	Относительно Stream и его вариантов - FileStream/MemoryStream нужно подумать над "интерфейсом" - объекты разные, а интерфейс-то один
 	//		В 1С такого понятия нет - там интерфейс "утиный - у кого метод Flush, тот и поток..", а у нас-то все строго!
@@ -33,7 +86,7 @@ namespace esb {
 	class Stream : public Object {
 		friend Stream make<Stream>(IValuePtr&&);
 		Stream(IValuePtr&& val_, IObjectPtr&& obj_) throw() : Object(std::move(val_), std::move(obj_)) {}
-		struct MethId { ESB_ID(Close, 0); ESB_ID(Size, 1); ESB_ID(GetReadOnlyStream, 2); ESB_ID(CurrentPosition, 3); ESB_ID(CopyTo, 4); ESB_ID(Flush, 5); ESB_ID(Seek, 6); ESB_ID(SetSize, 7); ESB_ID(Read, 8); ESB_ID(Write, 9); ESB_ID(BeginGetSize, 10); ESB_ID(BeginCopyTo, 11); ESB_ID(BeginSeek, 12); ESB_ID(BeginSetSize, 13); ESB_ID(BeginRead, 14); ESB_ID(BeginWrite, 15); ESB_ID(BeginFlush, 16); ESB_ID(BeginClose, 17); };
+		ESB_DECLARE_DISPIDS_METH(Stream);
 		struct PropId { ESB_ID(CanRead, 0); ESB_ID(CanWrite, 1); ESB_ID(CanSeek, 2); };
 	public:
 		ESB_DECLARE_TYPEINFO()
@@ -136,11 +189,29 @@ namespace esb {
 		ESB_IMPLEMENT_ENUM_ITEMS(BinaryDataBuffer, Numeric)	//Byte
 	public:
 		ESB_IMPLEMENT_INDEXED_COLLECTION_RW()
-	public:
+	protected:
+		// Попытка получить доступ к байт-буферу напрямую в стиле с++ минуя уровни абстракции платформы
+		// реализовано только в ESB_VER_v8300, для поздних версий не работает ввиду изменений в платформе
+		// исследования причины и исправления не проводились ввиду сложности доступа напрямую к байт-буферу, и,сответственно, 
+		// рисков опять получить несовместимость. При необходимости может быть реализовано.
+#if ESB_VER < ESB_VER_v8320
 		// esbhlp, чуть прямее (кривее), но в виде байтов, а не Numeric
-		size_t	GetByteBufferSize() const;
-		uint8_t GetByteBufferByte(size_t at_) const;
-		void	SetByteBufferByte(size_t at_, uint8_t value_);
+		size_t	_getByteBufferSize() const;
+		uint8_t _getByteBufferByte(size_t at_) const;
+		void	_setByteBufferByte(size_t at_, uint8_t value_);
+#endif
+	public:
+#if ESB_USE_BYTEBUFFER_DIRECT_HACK
+		// Просто эмулируем через диспатч-интерфейс
+		size_t	GetByteBufferSize() const						{ return _getByteBufferSize(); }
+		uint8_t GetByteBufferByte(size_t at_) const				{ return _getByteBufferByte(at_);	}
+		void	SetByteBufferByte(size_t at_, uint8_t value_)	{ return _setByteBufferByte(at_, value_); }
+#else
+		// Просто эмулируем через диспатч-интерфейс
+		size_t	GetByteBufferSize() const						{ return static_cast<size_t>(static_cast<ptrdiff_t>(GetSize())); }
+		uint8_t GetByteBufferByte(size_t at_) const				{ return static_cast<uint8_t>(static_cast<int>(Get(Numeric(at_))));	}
+		void	SetByteBufferByte(size_t at_, uint8_t value_)	{ return Set(Numeric(at_), Numeric(value_)); }
+#endif
 	};
 
 
@@ -150,7 +221,9 @@ namespace esb {
 	class FileStream : public Object {
 		friend FileStream make<FileStream>(IValuePtr&&);
 		FileStream(IValuePtr&& val_, IObjectPtr&& obj_) throw() : Object(std::move(val_), std::move(obj_)) {}
-		struct MethId { ESB_ID(Close, 0); ESB_ID(Size, 1); ESB_ID(GetReadOnlyStream, 2); ESB_ID(CurrentPosition, 3); ESB_ID(CopyTo, 4); ESB_ID(Flush, 5); ESB_ID(Seek, 6); ESB_ID(SetSize, 7); ESB_ID(Read, 8); ESB_ID(Write, 9); ESB_ID(BeginGetSize, 10); ESB_ID(BeginCopyTo, 11); ESB_ID(BeginSeek, 12); ESB_ID(BeginSetSize, 13); ESB_ID(BeginRead, 14); ESB_ID(BeginWrite, 15); ESB_ID(BeginFlush, 16); ESB_ID(BeginClose, 17); };
+		//struct MethId { ESB_ID(Close, 0); ESB_ID(Size, 1); ESB_ID(GetReadOnlyStream, 2); ESB_ID(CurrentPosition, 3); ESB_ID(CopyTo, 4); ESB_ID(Flush, 5); ESB_ID(Seek, 6); ESB_ID(SetSize, 7); ESB_ID(Read, 8); ESB_ID(Write, 9); ESB_ID(BeginGetSize, 10); ESB_ID(BeginCopyTo, 11); ESB_ID(BeginSeek, 12); ESB_ID(BeginSetSize, 13); ESB_ID(BeginRead, 14); ESB_ID(BeginWrite, 15); ESB_ID(BeginFlush, 16); ESB_ID(BeginClose, 17); };
+		//using MethId = internal::MethIdsFor_FileStream;
+		ESB_DECLARE_DISPIDS_METH(FileStream);
 		struct PropId { ESB_ID(CanRead, 0); ESB_ID(CanWrite, 1); ESB_ID(CanSeek, 2); ESB_ID(FileName, 3); };
 	public:
 		ESB_DECLARE_TYPEINFO()
@@ -192,7 +265,9 @@ namespace esb {
 	class MemoryStream : public Object {
 		friend MemoryStream make<MemoryStream>(IValuePtr&&);
 		MemoryStream(IValuePtr&& val_, IObjectPtr&& obj_) throw() : Object(std::move(val_), std::move(obj_)) {}
-		struct MethId { ESB_ID(Close, 0); ESB_ID(Size, 1); ESB_ID(GetReadOnlyStream, 2); ESB_ID(CurrentPosition, 3); ESB_ID(CopyTo, 4); ESB_ID(Flush, 5); ESB_ID(Seek, 6); ESB_ID(SetSize, 7); ESB_ID(Read, 8); ESB_ID(Write, 9); ESB_ID(BeginGetSize, 10); ESB_ID(BeginCopyTo, 11); ESB_ID(BeginSeek, 12); ESB_ID(BeginSetSize, 13); ESB_ID(BeginRead, 14); ESB_ID(BeginWrite, 15); ESB_ID(BeginFlush, 16); ESB_ID(BeginClose, 17); ESB_ID(CloseAndGetBinaryData, 18); };
+		//struct MethId { ESB_ID(Close, 0); ESB_ID(Size, 1); ESB_ID(GetReadOnlyStream, 2); ESB_ID(CurrentPosition, 3); ESB_ID(CopyTo, 4); ESB_ID(Flush, 5); ESB_ID(Seek, 6); ESB_ID(SetSize, 7); ESB_ID(Read, 8); ESB_ID(Write, 9); ESB_ID(BeginGetSize, 10); ESB_ID(BeginCopyTo, 11); ESB_ID(BeginSeek, 12); ESB_ID(BeginSetSize, 13); ESB_ID(BeginRead, 14); ESB_ID(BeginWrite, 15); ESB_ID(BeginFlush, 16); ESB_ID(BeginClose, 17); ESB_ID(CloseAndGetBinaryData, 18); };
+		//using MethId = internal::MethIdsFor_MemoryStream;
+		ESB_DECLARE_DISPIDS_METH(MemoryStream);
 		struct PropId { ESB_ID(CanRead, 0); ESB_ID(CanWrite, 1); ESB_ID(CanSeek, 2); };
 	public:
 		ESB_DECLARE_TYPEINFO()
@@ -230,11 +305,15 @@ namespace esb {
 	};
 
 
+
 // определение АПИ зависящего от типов esb_file
 //
+#if ESB_API_INCLUDE_core
 	// Функция Base64Значение(Строка_ Как Строка) Возвращает ДвоичныеДанные
 	inline BinaryData Base64Value(ConstPara<String> Line_) { ESB_INVOKE_API_FUNC1(BinaryData, core, 1, Line_); }
+#endif	//ESB_API_INCLUDE_core
 /////////////////////////////////////////////////
+
 
 }	//namespace esb 
 #endif //ESBFILE_H

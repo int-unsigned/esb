@@ -26,13 +26,16 @@
 // Не в namespace esb и дефайнами потому как не всегда в namespace esb испоьзуются.
 
 
-
-#define ES_T(T_)							L ## T_
-
 //Ошибка:
-//#define ES_THROW(ET_)						esb::throw_error(L"\u041E\u0448\u0438\u0431\u043A\u0430: " ET_)
-#define ES_THROW(ET_)						esb::throw_error(L"ЕСБ::" ET_)
-#define ESL_T(T_)							ES_T(T_)
+// Иногда при отладке удобно перед ошибкой получить ассерт и свалиться в отладчик.
+// НО НУЖНО УЧИТЫВАТЬ, что это отрабатывает глобально и в тех случаях когда ошибка делается специально для ее перехвата
+#if defined(NDEBUG) || 1
+#	define ES_THROW(ET_)						esb::throw_error(ESB_T("ЕСБ::") ET_)
+#else
+#	define ES_THROW(ET_)						assert(ET_==0),	esb::throw_error(ESB_T("ЕСБ::") ET_)
+#endif
+
+#define ESL_T(T_)							ESB_T(T_)
 #define ESL_THROW(ET_)						ES_THROW(ET_)
 
 
@@ -131,12 +134,17 @@
 //
 #define ESL_THROW_NUMERIC_SIZET_OVERFLOW()					ESL_THROW(ESL_T("Числовое значение превосходит по величине тип size_t."))
 
-#define ESL_THROW_INTEGER_OVERFLOW(INTEGER_DT_)					ESL_THROW(ESL_T("Числовое значение превосходит по величине тип " #INTEGER_DT_ "." ))
+#define ESL_THROW_INTEGER_OVERFLOW(INTEGER_DT_)				ESL_THROW(ESL_T("Числовое значение превосходит по величине тип " #INTEGER_DT_ "." ))
 
 namespace esb {
 	template<class IntegerT>
 	ESB_NORETURN inline void throw_error_integer_overflow();
-#define ESB_THROW_INTEGER_OVERFLOW_IMPL(INTEGER_DT_)	template<> ESB_NORETURN inline void throw_error_integer_overflow<INTEGER_DT_>()	{ ESL_THROW_INTEGER_OVERFLOW(INTEGER_DT_); }
+#define ESB_THROW_INTEGER_OVERFLOW_IMPL(INTEGER_DT_)	\
+	template<> \
+	ESB_NORETURN inline void throw_error_integer_overflow<INTEGER_DT_>()	{ \
+		ESL_THROW_INTEGER_OVERFLOW(INTEGER_DT_); \
+	}
+
 	ESB_THROW_INTEGER_OVERFLOW_IMPL(signed char)
 	ESB_THROW_INTEGER_OVERFLOW_IMPL(short)
 	ESB_THROW_INTEGER_OVERFLOW_IMPL(int)

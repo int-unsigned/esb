@@ -13,14 +13,7 @@
 #define ESB_CORE
 
 #include "esb_app.h"
-
-
-//затем "Unknwnbase.h" в комбинации с COM_NO_WINDOWS_H он windows.h не подключает, но все что надо подключает
-#define COM_NO_WINDOWS_H
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <combaseapi.h>
-#include "Unknwnbase.h"
+#include "esb_core_ifptr.h"
 
 #include <string>
 #include <string_view>
@@ -29,62 +22,8 @@
 
 //
 #include "esb_util.h"
+#include "esb_ustring.h"
 #include "esb_errors.h"
-
-
-
-
-
-// как аргумент шаблона допускается только struct: error C2993: "esb::FixedString": не является допустимым типом для параметра шаблона "TA", не являющегося типом.
-// message : "ptr_" не является открытым, неизменяемым, нестатическим элементом данных.
-// clang 14, 15 error: pointer to subobject of string literal is not allowed in a template argument
-// mscl 19.29.30146 (vc 16.11.19) - OK, but IDE sow error E2645: недопустимый нетипизированный аргумент шаблона
-//	
-class FixedString {
-	const wchar_t*	m_ptr;
-	size_t			m_len;
-public:
-	template<std::size_t N>
-	constexpr FixedString(const wchar_t(&arr_)[N]) : m_ptr(arr_), m_len(N - 1)
-	{}
-	constexpr FixedString(const wchar_t* ptr_, size_t len_) : m_ptr{ ptr_ }, m_len{ len_ }
-	{}
-	constexpr size_t len() const				{ return m_len; }
-	//string view -ish
-	constexpr size_t			size() const	{ return m_len; }
-	constexpr const wchar_t*	data()	const	{ return m_ptr; }
-};
-
-
-struct FixedTerm {
-	FixedString m_string[2];
-public:
-	constexpr FixedTerm(const FixedString& s1_, const FixedString& s2_) : m_string{ s1_, s2_ }
-	{}
-	template<size_t NEn, size_t NRu>
-	constexpr FixedTerm(const wchar_t(&str1_)[NEn], const wchar_t(&str2_)[NRu]) : m_string{ str1_, str2_ }
-	{}
-	constexpr size_t size() const { 
-		return 2; 
-	}
-	constexpr bool index_ok(int index_) const {
-		return (index_ >= 0 && (unsigned)index_ < size());
-	}
-	constexpr const FixedString& operator[](int index_) const {
-		assert(index_ok(index_));
-		return m_string[index_];
-	}
-	constexpr const FixedString* at(int index_) const {
-		return (index_ok(index_))? &m_string[index_] : nullptr;
-	}
-	constexpr const wchar_t* cstr_at(int index_) const {
-		return (index_ok(index_)) ? m_string[index_].data() : nullptr;
-	}
-};
-
-
-using UniqueTypeId = CLSID;
-using UniqueTypeTerm = FixedTerm;
 
 
 
@@ -105,134 +44,19 @@ ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY()
 
 
 
-//InterfacePtr
+//InterfacePtr дополнение _iid_of_t & query_interface
 namespace core 
 {
-	//TOBE:	Многие используемые esb объекты платформы являются COM-синглетонами. Т.е. создаются при старте, уничтожаются при выгрузке и Addref\Release
-	//		подсчетом ссылок не занимаются.
-	//		Поэтому вызывать Addref\Release им не нужно. И дело не в том, что это расходы 20 тактов процессора, а в том, что esbhlp кэширует у себя
-	//		некоторые объекты не запрашивая их каждый раз у платформы. (нр. апи-провайдеров)
-	//		И тогда возникает нехорошая ситуация с выгрузкой. Мы не контролируем очередность нашей выгрузки и можем случайно вызвать Release объекту
-	//		dll которого была уже выгружена платформой. 
-	//		Сейчас эта проблема решена способом OnComponentDoneCleanup, но лучше просто не вызывать.
-	template<class InterfaceT>
-	inline constexpr bool is_interface_singleton = false;
-
-
-	// По мотивам CComPtr
-	template <class T>
-	class InterfacePtrBase
-	{
-		static inline __declspec(nothrow) void _call_release(IUnknown& x_)	{ x_.Release(); }
-		static inline __declspec(nothrow) void _call_addref(IUnknown& x_)	{ x_.AddRef();	}
-	protected:
-		static void _do_addref(T& x_) noexcept {
-			if constexpr (is_interface_singleton<T>)	{	/*do nothing*/ }
-			else										{  _call_addref(x_); }
-		}
-		static void _do_addref(T* p_) noexcept {
-			if constexpr (is_interface_singleton<T>)	{	/*do nothing*/	}
-			else										{	if (p_) _call_addref(*p_);	}
-		}
-		static void _do_release(T* p_) noexcept {
-			if constexpr (is_interface_singleton<T>)	{	/*do nothing*/	}
-			else										{ if (p_) _call_release(*p_);	}
-		}	
-		static void _do_assign(T*& this_p_, T* other_p_) {
-			if constexpr (is_interface_singleton<T>)	{ /* no addref\release needed*/	} 
-			else										{ 
-				_do_addref(other_p_);
-				_do_release(this_p_);
-			}
-			this_p_ = other_p_;
-		}
-		constexpr InterfacePtrBase(nullptr_t) noexcept							: p { NULL }	{}
-		constexpr InterfacePtrBase(_Inout_opt_ T* lp) noexcept					: p{ lp }		{ _do_addref(p); }
-		constexpr InterfacePtrBase(T& x_) noexcept								: p{ &x_ }		{ _do_addref(x_); }
-		//5
-		constexpr InterfacePtrBase(InterfacePtrBase<T>&& other_) noexcept		: p{ other_.p } { other_.p = NULL; }
-		constexpr InterfacePtrBase(const InterfacePtrBase<T>& other_) noexcept	: p{ other_.p } { _do_addref(p); }
-		InterfacePtrBase<T>& operator=(const InterfacePtrBase<T>& other_) noexcept	{
-			if (this->p != other_.p)
-				_do_assign(this->p, other_.p);
-			return *this;
-		}
-		InterfacePtrBase<T>& operator=(InterfacePtrBase<T>&& other_) noexcept		{
-			if (this->p != other_.p) {
-				_do_release(this->p);
-				this->p = other_.p;
-				other_.p = NULL;
-			}
-			return *this;
-		}
-	public:
-		~InterfacePtrBase() noexcept						{ _do_release(p); }
-		operator T* () const noexcept						{ return p;	}
-		T& operator*() const noexcept						{ ESB_ASSERT(p != NULL);	return *p;	}
-		//The assert on operator& usually indicates a bug.  If this is really
-		//what is needed, however, take the address of the p member explicitly.
-		T** operator&() noexcept							{ ESB_ASSERT(p == NULL);	return &p; }
-		class NoAddRefReleaseT : public T {
-		private:
-			STDMETHOD_(ULONG, AddRef)() = 0;
-			STDMETHOD_(ULONG, Release)() = 0;
-		};
-		NoAddRefReleaseT* operator->() const noexcept		{ ESB_ASSERT(p != NULL);	return (NoAddRefReleaseT*)p; }
-		bool operator!() const noexcept						{ return (p == NULL);		}
-		bool operator<(_In_opt_ T* pT) const noexcept		{ return p < pT;		}
-		bool operator!=(_In_opt_ T* pT) const noexcept		{ return !operator==(pT);		}
-		bool operator==(_In_opt_ T* pT) const noexcept		{ return p == pT;		}
-	public:
-		//TOBE	Во многих местах используются всякие init\term\on_init\do_init\do_term\... и т.п. методы
-		//		Они все отражают тот факт, что многие объекты esb имеют отложенную инициализацию при OnComponentInitStartup 
-		//		и досрочную очистку при OnComponentDoneCleanup.
-		//		То есть esb-классы имеют некий мета-интерфейс инит\терм.
-		//		Тогда этот метод должен называться do_term и быть у InterfacePtr, а не у InterfacePtrBase
-		void reset() {
-			T* local_p = p;
-			p = nullptr;
-			_do_release(local_p);
-		}
-	public:
-		T* p;
-	};
-
-
-	//TOBE	InterfacePtr выписан так, чтобы никогда не быть nullptr. только в ограниченный исключительных случаях
-	//		По хорошему core::InterfacePtrBase - это core::InterfacePtr, а core::InterfacePtr это esb::InterfaceRef
-	template <class T>
-	class InterfacePtr : public InterfacePtrBase<T>
-	{
-		using base_t = InterfacePtrBase<T>;
-	public:
-		//Этот магический типдеф нам дальше много где нужен
-		using interface_t = T;
-
-		constexpr InterfacePtr(nullptr_t) noexcept : base_t(nullptr) {}
-		constexpr InterfacePtr(T& p_) noexcept : base_t(p_) {}
-		//5
-		constexpr InterfacePtr(const InterfacePtr<T>& lp) noexcept	: base_t(lp.p) {}
-		constexpr InterfacePtr(InterfacePtr<T>&& other_) noexcept	: base_t(std::move(other_)) {}
-		constexpr InterfacePtr<T>& operator=(const InterfacePtr<T>& other_) noexcept	{ return static_cast<InterfacePtr<T>&>(base_t::operator=(other_)); }
-		constexpr InterfacePtr<T>& operator=(InterfacePtr<T>&& other_) noexcept			{ return static_cast<InterfacePtr<T>&>(base_t::operator=(std::move(other_))); }
-		~InterfacePtr() noexcept = default;
-	public:
-		//TOBE: для InterfacePtr можно сделать шаблонный operator U, который разрешен если сами интерфейсы унаследованы.
-		//		то есть если некий IFaceDerived унаследовано от IFaceBase, то IFaceDerivedPtr может и должен легко перобразовываться в IFaceBasePtr
-		//		(сейчас для с++ это абсолютно разные не связанные друг с другом классы, что иногда напрягает)
-		//		Также можно сделать explicit cast вниз от IFaceBasePtr к IFaceDerivedPtr
-	};
-
 
 	template<class InterfaceT>
 	struct template_argument_type<InterfacePtr<InterfaceT>> { using type = InterfaceT; };
 
-	static_assert(std::is_same_v< IUnknown, template_argument_type_t<InterfacePtr<IUnknown>> > );
+	static_assert(std::is_same_v< IUnknown, template_argument_type_t<InterfacePtr<IUnknown>> >);
 
 
 	template<typename>
 	inline constexpr bool is_interface_ptr = false;
-	template<typename T> 
+	template<typename T>
 	inline constexpr bool is_interface_ptr<InterfacePtr<T>> = true;
 
 	static_assert(is_interface_ptr<int> == false);
@@ -315,13 +139,34 @@ namespace core
 //		Получится что нужно будет поддерживать два механизма - и АПИ платформы и собственно класс Exception. 
 //		Уж лучше что-то одно, но хорошо.
 //
-#ifdef ESB_USE_NATIVE
-#include "esb_coreall.h"
-#else 
-namespace core {
-#define ESB_CORE_EXCEPTION_SIZE		44
-#define ESB_CORE_EXCEPTION_ALIGN	4
+namespace core 
+{
+#if defined(ESB_x32)
+#	if ESB_VER < ESB_VER_v8320
+#		define ESB_CORE_EXCEPTION_SIZE		44
+#	elif ESB_VER <= ESB_VER_v8323
+#		define ESB_CORE_EXCEPTION_SIZE		96
+#	endif
+#	define ESB_CORE_EXCEPTION_ALIGN		4
+#elif defined(ESB_x64)
+#	if ESB_VER < ESB_VER_v8320
+#		define ESB_CORE_EXCEPTION_SIZE		56
+#	elif ESB_VER <= ESB_VER_v8323
+#		define ESB_CORE_EXCEPTION_SIZE		160
+#	endif
+#	define ESB_CORE_EXCEPTION_ALIGN		8
+#else
+#	error ESB configuration wrong! ESB_x32 or ESB_x64 not defined!
+#endif // ESB_x32)
 
+#pragma detect_mismatch( "ESB_CORE_EXCEPTION_SIZE" , PP_STRINGIZE(ESB_CORE_EXCEPTION_SIZE) )
+#pragma detect_mismatch( "ESB_CORE_EXCEPTION_ALIGN" , PP_STRINGIZE(ESB_CORE_EXCEPTION_ALIGN) )
+
+//#if ESBHLP_LIB || ESBHLP_OBJ
+#ifdef	ESB_COREALL
+	class Exception;
+	//native exception
+#else
 	class IExceptionObject;
 
 	class alignas(ESB_CORE_EXCEPTION_ALIGN) Exception {
@@ -336,16 +181,15 @@ namespace core {
 		Exception(Exception&&) noexcept;
 		Exception& operator=(Exception&&) noexcept;
 	public:
-		Exception(const GUID& clsid_, const std::wstring_view& text_, core::IExceptionObject*);
+		Exception(const GUID& clsid_, const esb::strview_t& text_, core::IExceptionObject*);	//esbhlp
 	public:
 		core::InterfacePtr<core::IExceptionObject> __thiscall	object(void) const;
-		const /*byval*/ std::wstring_view						text() const;
+		const /*byval*/ esb::strview_t							text() const;					//esbhlp
 	};
 	static_assert(sizeof(Exception) == ESB_CORE_EXCEPTION_SIZE && alignof(Exception) == ESB_CORE_EXCEPTION_ALIGN);
-#pragma detect_mismatch( "ESB_CORE_EXCEPTION_SIZE" , PP_STRINGIZE(ESB_CORE_EXCEPTION_SIZE) )
-#pragma detect_mismatch( "ESB_CORE_EXCEPTION_ALIGN" , PP_STRINGIZE(ESB_CORE_EXCEPTION_ALIGN) )
-}
 #endif
+}
+
 
 
 
@@ -458,10 +302,10 @@ namespace esb {
 	IValuePtr	create_numeric_value(unsigned long);
 	IValuePtr	create_numeric_value(unsigned long long);
 	IValuePtr	create_numeric_value(double);
-	//IValuePtr create_string_value(wchar_t const*);		//навязываем, чтобы не ленились длину высчитывать. это всегда можно сделать
-	IValuePtr	create_string_value(const std::wstring_view&);
+	//IValuePtr create_string_value(strchar_t const*);		//навязываем, чтобы не ленились длину высчитывать. это всегда можно сделать
+	IValuePtr	create_string_value(const strview_t&);
 	
-	bool		is_space(wchar_t);
+	bool		is_space(esb::strchar_t);
 	IValuePtr	create_error_value(const core::Exception& e_);
 
 	// создает значение для самого объекта тип
@@ -488,9 +332,15 @@ namespace esb {
 	void					IObjectMethods_InvokeAsProc(IObject& obj_, dispid_t meth_, const argarray_t& args_);
 	IValuePtr				IObjectMethods_InvokeAsFunc(IObject& obj_, dispid_t meth_);
 	IValuePtr				IObjectMethods_InvokeAsFunc(IObject& obj_, dispid_t meth_, const argarray_t& args_);
-	int						IObjectMethods_Find(IObject& obj_, const String& name_);
+
+	inline void		 IObjectMethods_InvokeAsProc(IObject& obj_, dispix_t meth_)								{ return IObjectMethods_InvokeAsProc(obj_, as_dispid(meth_)); }
+	inline void		 IObjectMethods_InvokeAsProc(IObject& obj_, dispix_t meth_, const argarray_t& args_)	{ return IObjectMethods_InvokeAsProc(obj_, as_dispid(meth_), args_); }
+	inline IValuePtr IObjectMethods_InvokeAsFunc(IObject& obj_, dispix_t meth_)								{ return IObjectMethods_InvokeAsFunc(obj_, as_dispid(meth_)); }
+	inline IValuePtr IObjectMethods_InvokeAsFunc(IObject& obj_, dispix_t meth_, const argarray_t& args_)	{ return IObjectMethods_InvokeAsFunc(obj_, as_dispid(meth_), args_); }
+
+	dispid_t				IObjectMethods_Find(IObject& obj_, const String& name_);
 #if ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK
-	int						IObjectMethods_Find(IObject& obj_, const std::wstring_view& name_);
+	dispid_t				IObjectMethods_Find(IObject& obj_, const strview_t& name_);
 #endif // !ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK
 
 	IValuePtr				IObjectProperties_GetValue(IObject& obj_, dispid_t prop_);
@@ -501,17 +351,17 @@ namespace esb {
 	inline void		 IObjectProperties_SetValue(IObject& obj_, dispix_t prop_, const IVariable& value_) { return IObjectProperties_SetValue(obj_, as_dispid(prop_), value_); }
 	inline bool		 IObjectProperties_IsReadable(IObject& obj_, dispix_t prop_)						{ return IObjectProperties_IsReadable(obj_, as_dispid(prop_)); }
 	inline bool		 IObjectProperties_IsWritable(IObject& obj_, dispix_t prop_)						{ return IObjectProperties_IsWritable(obj_, as_dispid(prop_)); }
-	int						IObjectProperties_Find(IObject& obj_, const String& name_);
+	dispid_t				IObjectProperties_Find(IObject& obj_, const String& name_);
 #if ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK
-	int						IObjectProperties_Find(IObject& obj_, const std::wstring_view& name_);
+	dispid_t				IObjectProperties_Find(IObject& obj_, const strview_t& name_);
 #endif // !ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK
-	size_t					IObjectProperties_Size(IObject& obj_);
+	ssize_t					IObjectProperties_Size(IObject& obj_);
 
 	IEnumValuesPtr			IEnumValues_Clone(IEnumValues& interface_);
 	bool					IEnumValues_Next(IEnumValues& interface_, IVariable& out_value_);
 	IValuePtr				IEnumValues_Next(IEnumValues& interface_);
 	bool					IEnumValues_Reset(IEnumValues& interface_);
-	bool					IEnumValues_Skip(IEnumValues& interface_, size_t n_skip_);
+	bool					IEnumValues_Skip(IEnumValues& interface_, isize_t n_skip_);
 
 	// интерфейсы коллекций
 	size_t					IxCollection_Size(IIxCollectionRO& interface_);
@@ -1354,7 +1204,7 @@ ESB_CHECK_AND_DETECT_MISMATCH(ESB_VAR_LAYOUT_ON_THAT_VALUE_OFFSET, ( offsetof(va
 	};
 	static_assert(offsetof(var_layout_on_that_byref, val_) == ESB_VAR_LAYOUT_ON_THAT_VALUE_OFFSET);
 // мы вынуждены задавать просто цифрами т.к. препроцессор ничего не вычисляет, а подключать буст не хочется
-#define ESB_VAR_LAYOUT_ON_THAT_ASSIGN_OFFSET	8
+#define ESB_VAR_LAYOUT_ON_THAT_ASSIGN_OFFSET	ESB_POINTER_SIZE2
 	ESB_CHECK_AND_DETECT_MISMATCH(ESB_VAR_LAYOUT_ON_THAT_ASSIGN_OFFSET, ( offsetof(var_layout_on_that_byref, assigner_) ))
 //
 ESB_WARNING_RESTORE()	//ESB_WARN_NO_OPERATOR_ASSIGN_ANY  ESB_WARN_NO_DEFAULT_CTOR
@@ -1886,18 +1736,14 @@ namespace esb	// String. Дескриптор зависит от String поэ�
 		static const String& Default_; // = Empty_;
 	public:
 		ESB_EXPLICIT_STRING
-		String(const std::wstring_view& val_) throw() : Value(create_string_value(val_))
+		String(const strview_t& val_) throw() : Value(create_string_value(val_))
 		{}
-		//template<std::size_t N>
-		//ESB_EXPLICIT_STRING
-		//String(const wchar_t(&arr_)[N]) : Value(create_string_value(std::wstring_view{arr_, N - 1}))
-		//{}
 	public:
-		const wchar_t*		c_str() const &;	// если мы rvalue, то можем уничтожиться и уничтожить c_str, поэтому возвращать указатель мы можем только если мы lvalue
+		const strchar_t*	c_str() const &;	// если мы rvalue, то можем уничтожиться и уничтожить c_str, поэтому возвращать указатель мы можем только если мы lvalue
 		std::size_t			length() const;
-		std::wstring		string() const				{ return std::wstring{ c_str(), length() }; }
-		const std::wstring_view	view() const &			{ return std::wstring_view{ c_str(), length() }; }
-		const std::wstring_view	view_when_safe() const	{ return std::wstring_view{ c_str(), length() }; }
+		string_t			string() const				{ return string_t{ c_str(), length() }; }
+		const strview_t		view() const &				{ return strview_t{ c_str(), length() }; }
+		const strview_t		view_when_safe() const		{ return strview_t{ c_str(), length() }; }
 		bool				empty() const				{ return (length() == 0); }
 		//using collator
 		int					compare(const String& other_) const;
@@ -1917,7 +1763,7 @@ namespace esb	// disp support
 // все классы построения дисп-интерфейса не предполагают наличие конструкторов по умолчанию. Но мы не можем явно в них показать =delete
 // т.к. они при этом становятся не-литеральными и не пригодными для констевал вычислений. Поэтому подавляем предупреждения.
 // также они могут содержать ссылки by-design и ввиду этого некопируемы. Подавляем.
-// Также, при развертывании шаблонов иногда появляется паддинг (типа std::array<wchar_t, NSize>	code_ при NSize==2). Подавляем.
+// Также, при развертывании шаблонов иногда появляется паддинг (типа std::array<strchar_t, NSize>	code_ при NSize==2). Подавляем.
 ESB_WARNING_SUPRESS(ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_ANY)
 //
 	// В этой структуре мы сохраняем указатель на строку-имя и подготавливаем массив для constexpr создания из этой строки уникального представления этой строки (code_)
@@ -1927,10 +1773,10 @@ ESB_WARNING_SUPRESS(ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_ANY)
 	//		это реализовано в методах make_MetaInterfaceMeth (см. esb_meta.h)
 	template<size_t NSize>
 	struct MetaNameData {
-		static constexpr size_t		len_ = NSize - 1;
-		const wchar_t*				text_;
-		std::array<wchar_t, NSize>	code_;
-		constexpr MetaNameData(const wchar_t(&str1_)[NSize]) : text_{ str1_ }, code_{}
+		static constexpr size_t			len_ = NSize - 1;
+		const strchar_t*				text_;
+		std::array<strchar_t, NSize>	code_;
+		constexpr MetaNameData(const strchar_t(&str1_)[NSize]) : text_{ str1_ }, code_{}
 		{}
 	};
 
@@ -1938,12 +1784,12 @@ ESB_WARNING_SUPRESS(ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_ANY)
 	// поле text_ - это оргинальное имя, поле code_ - преобразованное для упрощения алгоритма поиска по имени
 	struct DispName {
 		size_t						len_;
-		const wchar_t*				text_;
-		const wchar_t*				code_;
+		const strchar_t*			text_;
+		const strchar_t*			code_;
 		template<size_t NSize>
 		constexpr DispName(const MetaNameData<NSize>& data_) : len_(data_.len_), text_(data_.text_), code_(data_.code_.data())
 		{}
-		constexpr std::wstring_view	text_view() const { return { text_, len_ }; }
+		constexpr strview_t			text_view() const { return { text_, len_ }; }
 	};
 
 	// 1С двуязычная (как минимум) соответственно каждый метод (свойство) определяется двумя именами (текстовыми идентификаторами)
@@ -1954,8 +1800,8 @@ ESB_WARNING_SUPRESS(ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_ANY)
 		DispName					names_[names_count_];
 		constexpr size_t			names_count() const						{ return names_count_; }
 		constexpr const DispName&	name(size_t index_) const				{ assert(index_ < names_count());		return names_[index_]; }
-		constexpr std::wstring_view	name_text(size_t index_) const			{ return name(index_).text_view(); }
-		constexpr const wchar_t*	name_code_cstr(size_t index_) const		{ return name(index_).code_;	}
+		constexpr strview_t			name_text(size_t index_) const			{ return name(index_).text_view(); }
+		constexpr const strchar_t*	name_code_cstr(size_t index_) const		{ return name(index_).code_;	}
 	};
 ESB_DETECT_MISMATCH(ESB_DISP_TERM_NAMES_COUNT)
 
@@ -2080,14 +1926,14 @@ namespace esb {
 
 		const CLSID&				TypeId_;
 		const FixedTerm&			TypeTerm_;
-		const std::wstring_view&	TypeDescriptionInit_;
+		const strview_t&			TypeDescriptionInit_;
 		//NOTE	Какое либо поле (и лучше это) обязано быть mutable. Тогда компилятор эту constexpr структуру укладывает в секцию data (rw),
 		//		а не в rodata. Т.е. структура вся constexpr, но можно что-то переписывать. 
 		//		(Если структура в rodata, то при попытке переписать крах)
 		//		Это нам важно для наших наследников - TypeDescriptor... Мы их в рантайме правильной vtbl инициализируем.
 		mutable ClassOpt<String>	TypeDescription_{ nullptr };
 	public:
-		constexpr TypeInfo(const CLSID& type_id_, const FixedTerm& type_term_, const std::wstring_view& type_description_)
+		constexpr TypeInfo(const CLSID& type_id_, const FixedTerm& type_term_, const strview_t& type_description_)
 													: TypeId_(type_id_), TypeTerm_(type_term_), TypeDescriptionInit_(type_description_)
 		{}	
 	public:
@@ -2242,7 +2088,7 @@ namespace esb {
 	using ExtValueToStringFn = String(const ExtValueBase&);
 	using ExtValueToDateTimeFn = DateTime(const ExtValueBase&);
 	using ExtValueIsEqualDataFn = bool(const ExtValueBase&, const ExtValueBase&);
-	using ExtValueDataHashFn = long(const ExtValueBase&);
+	using ExtValueDataHashFn = ihash_t(const ExtValueBase&);
 
 
 	//INFO	Фактически "дескриптор" - это некий аналог vtbl и typeinfo, только своими руками.
@@ -2257,7 +2103,7 @@ namespace esb {
 		ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeDescriptor);
 
 		ESB_CONSTEXPR_TYPEDESCRIPTOR
-		TypeDescriptor(const CLSID & id_, const FixedTerm & term_, const std::wstring_view & description_)
+		TypeDescriptor(const CLSID & id_, const FixedTerm & term_, const strview_t& description_)
 			: TypeDescriptorInterfaceImpl(), TypeInfo(id_, term_, description_)
 		{}
 	protected:
@@ -2284,7 +2130,7 @@ namespace esb {
 		ExtValueDataHashFn*			DataHash_		= nullptr;
 	public:
 		ESB_CONSTEXPR_TYPEDESCRIPTOR
-		TypeDescriptorValue(const CLSID& id_, const FixedTerm& term_, const std::wstring_view& description_, ExtInstanceDeleterFn& deleter_)
+		TypeDescriptorValue(const CLSID& id_, const FixedTerm& term_, const strview_t& description_, ExtInstanceDeleterFn& deleter_)
 			: TypeDescriptor(id_, term_, description_), InstanceDeleter_(deleter_)
 		{}
 	protected:
@@ -2306,7 +2152,7 @@ namespace esb {
 		ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeDescriptorValueSimple);
 
 		ESB_CONSTEXPR_TYPEDESCRIPTOR
-		TypeDescriptorValueSimple(const CLSID& id_, const FixedTerm& term_, const std::wstring_view& description_, ExtInstanceDeleterFn& deleter_)
+		TypeDescriptorValueSimple(const CLSID& id_, const FixedTerm& term_, const strview_t& description_, ExtInstanceDeleterFn& deleter_)
 			: TypeDescriptorValue(id_, term_, description_, deleter_)
 		{}
 	public:
@@ -2333,7 +2179,7 @@ namespace esb {
 
 	public:
 		ESB_CONSTEXPR_TYPEDESCRIPTOR
-		TypeDescriptorValueObject(const CLSID& id_, const FixedTerm& term_, const std::wstring_view& description_, ExtInstanceDeleterFn& deleter_)
+		TypeDescriptorValueObject(const CLSID& id_, const FixedTerm& term_, const strview_t& description_, ExtInstanceDeleterFn& deleter_)
 			: TypeDescriptorValue(id_, term_, description_, deleter_)
 		{}
 	public:
@@ -2378,7 +2224,7 @@ namespace esb // esb addin & register support
 
 		DispStatMethParaDefFn*	ObjMethParaDefault_ = nullptr;
 	public:
-		constexpr AddinDescriptor(const CLSID& type_id_, const FixedTerm& type_term_, const std::wstring_view& type_description_,
+		constexpr AddinDescriptor(const CLSID& type_id_, const FixedTerm& type_term_, const strview_t& type_description_,
 									DispStableSizeFn* prop_count_, DispStableFindFn* prop_find_, DispStatPropFn* prop_item_,
 									DispStableSizeFn* meth_count_, DispStableFindFn* meth_find_, DispStatMethFn* meth_item_)
 			: TypeInfo(type_id_, type_term_, type_description_),
@@ -2472,9 +2318,9 @@ namespace esb // DelagatToMeth support
 	protected:
 		struct DelegatToMethObjectValue : public IValue, public IObject {
 			refcounter_t	m_refs;
+			dispid_t		m_item;		// в таком порядке на х64 укладка лучше
 			IObjectPtr		m_object;
-			dispid_t		m_item;
-			DelegatToMethObjectValue(IObjectPtr&& object_, dispid_t item_) : m_refs(0), m_object(std::move(object_)), m_item(item_)
+			DelegatToMethObjectValue(IObjectPtr&& object_, dispid_t item_) : m_refs(0), m_item(item_), m_object(std::move(object_))
 			{}
 		public:
 			IValuePtr	InvokeAsFunc() const							{ return IObjectMethods_InvokeAsFunc(*m_object, m_item); }
@@ -2488,10 +2334,10 @@ namespace esb // DelagatToMeth support
 		using ext_value_t = DelegatToMethObjectValue;
 		using allocator_t = ExtAllocator< alignof(ext_value_t) >;
 		
-		ESB_DEFINE_GUID(static inline constexpr const CLSID	TypeId_, 0xbf925800, 0x160e, 0x4219, 0xb7, 0x46, 0x6e, 0x2e, 0x26, 0x34, 0x42, 0x8b);
-		static inline constexpr const FixedTerm				TypeTerm_{ L"DelegatToMeth", L"ДелегатМетода" };
-		static inline constexpr const std::wstring_view		TypeTextInit_{ L"Делегат вызова метода объекта" };
-		static inline /*constexpr*/ Nullable<String>		TypeText_{ nullptr };
+		ESB_DEFINE_GUID(static inline constexpr const CLSID	TypeId_,		0xbf925800, 0x160e, 0x4219, 0xb7, 0x46, 0x6e, 0x2e, 0x26, 0x34, 0x42, 0x8b);
+		static inline constexpr const FixedTerm				TypeTerm_		{ ESB_T("DelegatToMeth"), ESB_T("ДелегатМетода") };
+		static inline constexpr const strview_t				TypeTextInit_	{ ESB_T("Делегат вызова метода объекта") };
+		static inline /*constexpr*/ Nullable<String>		TypeText_		{ nullptr };
 
 		static ext_value_t& ValueInstanceCreate(IObjectPtr&& obj_, dispix_t meth_) {
 			void* pv = allocator_t::Alloc(sizeof(ext_value_t));
@@ -2515,9 +2361,9 @@ namespace esb // DelagatToMeth support
 		// это вызывается из esbhlp при создании делегата в 1С коде.
 		static ext_value_t& CreateValueInstance(const IVariable* obj_var_, const IVariable* vname_) {
 			ESB_ASSERT(obj_var_);
-			IValuePtr obj_val = IVariable_GetValue(*obj_var_);
-			IObjectPtr obj = query_interface_or_throw<IObjectPtr>(*obj_val);
-			String name = check_and_make_from_var<String>(vname_);	//TODO
+			IValuePtr	obj_val = IVariable_GetValue(*obj_var_);
+			IObjectPtr	obj = query_interface_or_throw<IObjectPtr>(*obj_val);
+			String		name = check_and_make_from_var<String>(vname_);
 			return CreateValueInstance(std::move(obj), name);
 		}
 	public:

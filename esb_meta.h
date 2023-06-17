@@ -59,7 +59,7 @@
 //	Array&&			- фактически то-же самое что и просто Array, но немного оптимизируется дальнейшая move передача значения аргумента куда-либо. (см. про Var<>)
 //	(на месте Array подразумевается любой esb-класс, esb-value-based класс, в том числе и Arbitrary и ClassMix<> со списком классов)
 // 
-//	Также возможно использование с++ bool для Bollean - имплисит преобразование, const std::wstring_view& для String - (const!), сами данные строки менять мы не имеем права
+//	Также возможно использование с++ bool для Bollean - имплисит преобразование, const strview_t& для String - (const!), сами данные строки менять мы не имеем права
 //  signed\unsigned int\long\64 для Numeric - строгое преобразование с проверкой дробности и знака и переполнения - если что не так, то ошибка! 
 //	Если что не так, то Вы всегда можете принять сам Numeric и решить что делать.
 // 
@@ -109,7 +109,7 @@ namespace esb // esb-meta
 		using descriptor_t = DESCRIPTOR_T_< CLASS_T_ >;										\
 		static constexpr CLSID				TypeId_ = guid_from_hex(GUID_STR_);				\
 		static constexpr FixedTerm			TypeTerm_{ ESB_INTERFACEDEF_TERM NAME_PAIR_ };	\
-		static constexpr std::wstring_view	TypeDescriptionInit_{ ESB_T(TEXT_) };
+		static constexpr strview_t			TypeDescriptionInit_{ ESB_T(TEXT_) };
 
 
 #define ESB_INTERFACEDEF_DESCRIPTOR_T(CLASS_T_)		esb::interface_info_t<CLASS_T_>::descriptor_t
@@ -322,7 +322,6 @@ namespace esb // esb-meta
 	};
 
 
-
 	// Invoker для конструкторов. У него специфика т.к. у конструкторов нет адреса и ему надо descriptor_t::CreateValueInstance
 	template<typename, typename>
 	struct ExtInvoker4CtorFromTypePack;
@@ -342,6 +341,85 @@ namespace esb // esb-meta
 		}
 	};
 
+
+
+
+	// Вспомогательное. Используется при consteval создании диспатч-массивов методов и свойств.
+	// Массивы строятся в порядке возростания имени методов приведенных к регистро-независимому виду.
+	// В ран-тайме метод по имени ищется в таком массиве простым бинарным поиском.
+	template<std::size_t N>
+	consteval void consteval_array_fill_nocase(std::array<strchar_t, N>& arr_, const strchar_t(&str_)[N]) {
+		for (size_t i = 0; i < N; ++i) {
+			arr_[i] = to_nocase(str_[i]);
+		}
+	}
+
+	template<std::size_t N>
+	consteval std::array<strchar_t, N> consteval_array_make_nocase(const strchar_t(&arr_)[N]) {
+		std::array<strchar_t, N> a{};
+		consteval_array_fill_nocase(a, arr_);
+		return a;
+	}
+
+
+	//TOBE Примитивнейшая сортировка. Возможно в какой-то момент std перестанет глючить на consteval и можно будет убрать этот костыль
+	template<class ElemT, size_t NSize, class PredT>
+	consteval void consteval_array_sort(std::array<ElemT, NSize>& arr_, PredT better_pred_) {
+		for (size_t i = 0; i < NSize; ++i) {
+			ElemT* better_elem = &arr_[i];
+			size_t	better_elem_index = i;
+			for (size_t j = i + 1; j < NSize; j++) {
+				if (better_pred_(arr_[j], *better_elem)) {
+					better_elem = &arr_[j];
+					better_elem_index = j;
+				}
+			}
+			if (better_elem_index != i)
+				swap(arr_[i], *better_elem);
+		}
+	}
+
+	//TODO:	Поскольку все диспатч-АПИ 1С построено на int/unsigned int и в режиме x64 тоже, то целесообразно отказаться от "общности" 
+	//		и перенести find в meta привязав к dispid/dispix.
+	//		
+	//TODO: в esb_meta используется версия от array, а в esbldr просто массив. Нужно доработать esbldr и привязать его к мета.
+	//TODO:	Не исключено что нужно сделать "свой" std::array, т.к. реализация от MS (или стандарт вообще) не допускают пустой массив
+	//		если у элемента нет конструктора по-умолчанию. Это неудобно и существенно осложняет реализацию dispatch-interface. (см. meta)
+	inline constexpr isize_t ARRAY_FIND_BINARY_NOT_FOUND = isize_t(-1);
+	//
+	template<class ElemT, class ValT, class CompT>
+	constexpr isize_t array_find_binary_proc(const ElemT* arr_, isize_t size_, const ValT& val_, CompT comp_, isize_t notfound_ = ARRAY_FIND_BINARY_NOT_FOUND) {
+		int i_min = 0;				// int - это очень!!!
+		int i_max = size_ - 1;		// ----- !!очень!! важно для алгоритма!!!
+
+		while (i_min <= i_max) {
+			unsigned int i_mid = (unsigned int)(i_min + (i_max - i_min) / 2);
+
+			int cmp = comp_(arr_[i_mid], val_);
+			if (cmp < 0)
+				i_min = (int)i_mid + 1;
+			else if (cmp > 0)
+				i_max = (int)i_mid - 1;	// i_mid может дойти до 0 и тогда, если i_max unsigned, он становится 4 миллиарда...
+			else
+				return i_mid; // mid_val == key_. found
+		}
+
+		return notfound_;
+	}
+	template<class ElemT, unsigned int NSize, class ValT, class CompT>
+	constexpr dispid_t disparray_find(const ElemT(&arr_)[NSize], const ValT& val_, CompT comp_) {
+		isize_t ix = array_find_binary_proc(arr_, NSize, val_, comp_, ARRAY_FIND_BINARY_NOT_FOUND);
+		return (ix == ARRAY_FIND_BINARY_NOT_FOUND) ? DISPID_NOTFOUND : as_dispid(ix);
+
+		//return array_find_binary_proc(arr_, NSize, val_, comp_, notfound_);
+	}
+	template<class ElemT, unsigned int NSize, class ValT, class CompT>
+	constexpr dispid_t disparray_find(const std::array<ElemT, NSize>& arr_, const ValT& val_, CompT comp_) {
+		isize_t ix = array_find_binary_proc(arr_.data(), NSize, val_, comp_, ARRAY_FIND_BINARY_NOT_FOUND);
+		return (ix == ARRAY_FIND_BINARY_NOT_FOUND)? DISPID_NOTFOUND : as_dispid(ix);
+	}
+	//-------------------------------------------------------------------------------------------------------------------------
+	//-------------------------------------------------------------------------------------------------------------------------
 
 
 
@@ -375,7 +453,7 @@ namespace esb // esb-meta
 		}
 		MetaNameData<NEn>			name_;
 		MetaNameData<NRu>			alias_;
-		constexpr MetaInterfaceMeth(const wchar_t(&sname_)[NEn], const wchar_t(&salias_)[NRu]) : name_{ sname_ }, alias_{ salias_ }
+		constexpr MetaInterfaceMeth(const strchar_t(&sname_)[NEn], const strchar_t(&salias_)[NRu]) : name_{ sname_ }, alias_{ salias_ }
 		{}
 
 		// dispinfo DispInfoStatMeth or DispInfoMembMeth 
@@ -395,7 +473,7 @@ namespace esb // esb-meta
 	// А в таком виде - создаем внутри consteval функции, заполняем и возвращаем - позволяет
 	// (TOBE: Возможно красивее сделать static MetaInterfaceMeth::make())
 	template<auto MethPtr, size_t NEn, size_t NRu>
-	consteval MetaInterfaceMeth<MethPtr, NEn, NRu> make_MetaInterfaceMeth(const wchar_t(&sen_)[NEn], const wchar_t(&sru_)[NRu]) {
+	consteval MetaInterfaceMeth<MethPtr, NEn, NRu> make_MetaInterfaceMeth(const strchar_t(&sen_)[NEn], const strchar_t(&sru_)[NRu]) {
 		MetaInterfaceMeth<MethPtr, NEn, NRu> m{ sen_, sru_ };
 		consteval_array_fill_nocase(m.name_.code_, sen_);
 		consteval_array_fill_nocase(m.alias_.code_, sru_);
@@ -405,7 +483,7 @@ namespace esb // esb-meta
 	// Макросы упрощающие вызов построителя мета-элементов-метод инетрфейса.
 	// базовый макрос позволяет иметь разными имя метода и английское (первое) имя для диспатч-интерфейса, но считаю это нежелательным т.к. рисковано нюансами
 	// (для простоты реализации макрос ожидает в первом параметре OBJ_ имя вместе с ::	- object_t:: / somewhat_t:: / <пусто>
-#define ESB_META_INTERFACE_MAKE_METH(OBJ_, NAME_EN_, NAME_RU_)		make_MetaInterfaceMeth<& OBJ_ NAME_EN_>( L#NAME_EN_, L##NAME_RU_ )
+#define ESB_META_INTERFACE_MAKE_METH(OBJ_, NAME_EN_, NAME_RU_)		make_MetaInterfaceMeth<& OBJ_ NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
 // Основные макросы описывающие мета-интерфейс методов объекта строят его для предопределенного в структуре псевданима object_t
 #define ESB_META_INTERFACE_MEMB_METH(NAME_EN_, NAME_RU_)		ESB_META_INTERFACE_MAKE_METH(ESB_INTERFACE_OBJECT_FIELD ::, NAME_EN_, NAME_RU_)
 #define ESB_META_INTERFACE_STAT_METH(NAME_EN_, NAME_RU_)		ESB_META_INTERFACE_MAKE_METH(ESB_INTERFACE_OBJECT_FIELD ::, NAME_EN_, NAME_RU_)
@@ -476,7 +554,7 @@ namespace esb // esb-meta
 
 		MetaNameData<NEn>			name_;
 		MetaNameData<NRu>			alias_;
-		constexpr MetaInterfaceProp(const wchar_t(&sname_)[NEn], const wchar_t(&salias_)[NRu]) noexcept : name_{ sname_ }, alias_{ salias_ }
+		constexpr MetaInterfaceProp(const strchar_t(&sname_)[NEn], const strchar_t(&salias_)[NRu]) noexcept : name_{ sname_ }, alias_{ salias_ }
 		{}
 
 		// disp-interface. Объект DispInfoT может быть как DispInfoStatProp так и DispInfoMembProp. Мы обслуживаем оба варианта и нам надо выбрать
@@ -492,7 +570,7 @@ namespace esb // esb-meta
 	};
 	//
 	template<auto MethGet, auto MethSet, size_t NEn, size_t NRu>
-	consteval MetaInterfaceProp<MethGet, MethSet, NEn, NRu> make_MetaInterfaceProp(const wchar_t(&sen_)[NEn], const wchar_t(&sru_)[NRu]) {
+	consteval MetaInterfaceProp<MethGet, MethSet, NEn, NRu> make_MetaInterfaceProp(const strchar_t(&sen_)[NEn], const strchar_t(&sru_)[NRu]) {
 		MetaInterfaceProp<MethGet, MethSet, NEn, NRu> prop{ sen_, sru_ };
 		// не получается делать преобразование в конструкторах объектов :(. Только так - сначала создавать пустые и потом записывать. (MSVC 16.11.19)
 		consteval_array_fill_nocase(prop.name_.code_, sen_);
@@ -501,9 +579,9 @@ namespace esb // esb-meta
 	}
 
 	// для задания области видимости OBJ_ нужно передавать в виде OBJ:: (или пусто)
-#define ESB_META_INTERFACE_MAKE_PROP_RW(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp< & OBJ_ Get##NAME_EN_, & OBJ_ Set##NAME_EN_>( L#NAME_EN_, L##NAME_RU_ )
-#define ESB_META_INTERFACE_MAKE_PROP_RO(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp< & OBJ_ Get##NAME_EN_, nullptr>( L#NAME_EN_, L##NAME_RU_ )
-#define ESB_META_INTERFACE_MAKE_PROP_WO(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp<nullptr, & OBJ_ Set##NAME_EN_>( L#NAME_EN_, L##NAME_RU_ )
+#define ESB_META_INTERFACE_MAKE_PROP_RW(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp< & OBJ_ Get##NAME_EN_, & OBJ_ Set##NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
+#define ESB_META_INTERFACE_MAKE_PROP_RO(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp< & OBJ_ Get##NAME_EN_, nullptr>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
+#define ESB_META_INTERFACE_MAKE_PROP_WO(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp<nullptr, & OBJ_ Set##NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
 // для создания элементов интерфейса объекта мы требуем, чтобы в структуре описания интерфейса был определен object_t для которого создается интерфейс
 // все элементы интерфейса объекта определеяются для этого object_t
 // (TOBE: иначи можно наопределять для разных объектов и что получится неведомо..., неплохо бы сделать защиту получше...)
@@ -627,12 +705,16 @@ namespace esb // esb-meta
 	//		обработать и вернуть в 1С результат. При таком использовании диспатч интерфейса это решение вполне приемлемо.
 	struct DispNameIndex {
 		const DispName* name_;
-		size_t			index_;
+		dispix_t		index_;
 		// выносим в окружающий namespace метод swap, чтобы работали алгоритмы сортировки опирающиеся на наличие такого метода
 		friend consteval void swap(DispNameIndex& a, DispNameIndex& b) noexcept {
 			return std::swap(a, b);
 		}
 	};
+
+	constexpr int cstr_compare_as_is(const strchar_t* ps1_, const strchar_t* ps2_) {
+		return cstr_compare(CStrIterator(ps1_), CStrIterator(ps2_));
+	}
 
 	// При построении поискового индекса имен учитываем, что у каждого элемента DispTerm::names_count_ имен и каждое из них ссылается на один и тот же метод
 	template<class DispInfoT, size_t NItems>
@@ -645,14 +727,14 @@ namespace esb // esb-meta
 		std::array<DispNameIndex, NItems* DispTerm::names_count_> names{};
 		// заполняем массив учитывая DispTerm::names_count_==2 (можно, конечно и цикл сделать)
 		static_assert(DispTerm::names_count_ == 2, "expected DispTerm::names_count_==2");
-		for (size_t i = 0; i < NItems; ++i) {
+		for (dispix_t i = 0; i < NItems; ++i) {
 			names[i * 2 + 0].name_ = &info_[i].term_.names_[0];		names[i * 2 + 0].index_ = i;
 			names[i * 2 + 1].name_ = &info_[i].term_.names_[1];		names[i * 2 + 1].index_ = i;
 		}
 
 		//NOTE	consteval в конце объявления лямбды - он относится к методу () и без него лямбда в consteval не работает.
 		constexpr auto lesser = [](const DispNameIndex& a, const DispNameIndex& b) consteval -> bool {
-			return ((consteval_cstr_compare_as_is(a.name_->code_, b.name_->code_) < 0));
+			return ((cstr_compare(a.name_->code_, b.name_->code_) < 0));		// сравниваем "как есть" т.к. поле .code уже преобразрвано к no-case
 		};
 		// сортируем
 		consteval_array_sort(names, lesser);
@@ -663,8 +745,9 @@ namespace esb // esb-meta
 
 	// Этот компаратор работает в рантайме, когда к нам приходит имя в неизвестно-case-виде. С учетом, что у нас для имени уже сформировано nocase .code_
 	struct DispNameComparatorNoCaseXxCase {
-		constexpr int operator()(const DispNameIndex& a, const std::wstring_view& b_xxcase_) const {
-			return cstr_compare_nocase_xxcase(a.name_->code_, b_xxcase_.data());
+		constexpr int operator()(const DispNameIndex& a, const strview_t& b_xxcase_) const {
+			//return cstr_compare_nocase_xxcase(a.name_->code_, b_xxcase_.data());
+			return esb::cstr_compare(a.name_->code_, esb::CStrIteratorNoCase(b_xxcase_.data()));
 		}
 	};
 
@@ -674,17 +757,17 @@ namespace esb // esb-meta
 	template<class ExtObjectT>
 	struct DispFinderMeth {
 		static constexpr auto elem_index_ = make_disp_names_index(ExtObjectT::ESB_INTERFACE_METH_INFO_FIELD);
-		static constexpr dispid_t find(const std::wstring_view& name_) {
-			size_t i_in_map = array_find_binary(elem_index_, name_.data(), DispNameComparatorNoCaseXxCase{}, ARRAY_FIND_BINARY_NOT_FOUND);
-			return (i_in_map == ARRAY_FIND_BINARY_NOT_FOUND) ? DISPID_NOTFOUND : as_dispid(elem_index_[i_in_map].index_);
+		static constexpr dispid_t find(const strview_t& name_) {
+			dispid_t did = disparray_find(elem_index_, name_.data(), DispNameComparatorNoCaseXxCase{});
+			return (did == DISPID_NOTFOUND)? DISPID_NOTFOUND : as_dispid(elem_index_[as_dispix(did)].index_);
 		}
 	};
 	template<class ExtObjectT>
 	struct DispFinderProp {
 		static constexpr auto elem_index_ = make_disp_names_index(ExtObjectT::ESB_INTERFACE_PROP_INFO_FIELD);
-		static constexpr dispid_t find(const std::wstring_view& name_) {
-			size_t i_in_map = array_find_binary(elem_index_, name_.data(), DispNameComparatorNoCaseXxCase{}, ARRAY_FIND_BINARY_NOT_FOUND);
-			return (i_in_map == ARRAY_FIND_BINARY_NOT_FOUND) ? DISPID_NOTFOUND : as_dispid(elem_index_[i_in_map].index_);
+		static constexpr dispid_t find(const strview_t& name_) {
+			dispid_t did = disparray_find(elem_index_, name_.data(), DispNameComparatorNoCaseXxCase{});
+			return (did == DISPID_NOTFOUND)? DISPID_NOTFOUND : as_dispid(elem_index_[as_dispix(did)].index_);
 		}
 	};
 	template<class ExtInterfaceT>
@@ -726,7 +809,7 @@ namespace esb // esb-meta
 			return 0;
 	}
 	template<class DispInterfaceT>
-	constexpr dispid_t dispinterface_impl_prop_find(const std::wstring_view& name_) {
+	constexpr dispid_t dispinterface_impl_prop_find(const strview_t& name_) {
 		if constexpr (is_interface_has_prop_info_find<DispInterfaceT>)
 			return DispInterfaceT::ESB_INTERFACE_PROP_FIND_FIELD(name_);
 		else if constexpr (is_interface_has_prop_info<DispInterfaceT>)
@@ -762,7 +845,7 @@ namespace esb // esb-meta
 			return 0;
 	}
 	template<class DispInterfaceT>
-	constexpr dispid_t dispinterface_impl_meth_find(const std::wstring_view& name_) {
+	constexpr dispid_t dispinterface_impl_meth_find(const strview_t& name_) {
 		if constexpr (is_interface_has_meth_info_find<DispInterfaceT>)
 			return DispInterfaceT::ESB_INTERFACE_METH_FIND_FIELD(name_);
 		else if constexpr (is_interface_has_meth_info<DispInterfaceT>)
@@ -885,7 +968,7 @@ namespace esb // esb-meta
 					if (ExtObjectT::ESB_INTERFACE_PROP_FIND_FIELD(ExtObjectT::ESB_INTERFACE_PROP_INFO_FIELD[(unsigned)i_elem].name_text(i_lang)) != i_elem) return false;
 				}
 			}
-			if (ExtObjectT::ESB_INTERFACE_PROP_FIND_FIELD(L"") != ARRAY_FIND_BINARY_NOT_FOUND) return false;
+			if (ExtObjectT::ESB_INTERFACE_PROP_FIND_FIELD(ESB_T("")) != ARRAY_FIND_BINARY_NOT_FOUND) return false;
 		}
 
 		using face_elem_map_t = DispFinderProp<ExtObjectT>;
@@ -894,7 +977,7 @@ namespace esb // esb-meta
 				if (face_elem_map_t::find(ExtObjectT::ESB_INTERFACE_PROP_INFO_FIELD[(unsigned)i_elem].term_.name_text(i_lang)) != i_elem) return false;
 			}
 		}
-		if (face_elem_map_t::find(L"") != ARRAY_FIND_BINARY_NOT_FOUND) return false;
+		if (face_elem_map_t::find(ESB_T("")) != ARRAY_FIND_BINARY_NOT_FOUND) return false;
 
 		return true;
 	}
@@ -908,7 +991,7 @@ namespace esb // esb-meta
 					if (ExtObjectT::ESB_INTERFACE_METH_FIND_FIELD(ExtObjectT::ESB_INTERFACE_METH_INFO_FIELD[i_meth].term_.name_text(i_lang)) != i_meth) return false;
 				}
 			}
-			if (ExtObjectT::ESB_INTERFACE_METH_FIND_FIELD(L"") != ARRAY_FIND_BINARY_NOT_FOUND) return false;
+			if (ExtObjectT::ESB_INTERFACE_METH_FIND_FIELD(ESB_T("")) != ARRAY_FIND_BINARY_NOT_FOUND) return false;
 		}
 
 		using face_meth_map_t = DispFinderMeth<ExtObjectT>;
@@ -917,7 +1000,7 @@ namespace esb // esb-meta
 				if (face_meth_map_t::find(ExtObjectT::ESB_INTERFACE_METH_INFO_FIELD[(unsigned)i_meth].term_.name_text(i_lang)) != i_meth) return false;
 			}
 		}
-		if (face_meth_map_t::find(L"") != ARRAY_FIND_BINARY_NOT_FOUND) return false;
+		if (face_meth_map_t::find(ESB_T("")) != ARRAY_FIND_BINARY_NOT_FOUND) return false;
 
 		return true;
 	}

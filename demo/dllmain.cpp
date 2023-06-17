@@ -21,6 +21,8 @@
 #include "..\esb_es_data.h"
 #include "..\esb_es_file.h"
 
+#pragma comment( lib , "../lib/" ESB_ESBHLPLIB_PATH_NAME )
+
 
 #include <vector>
 #include <algorithm>
@@ -29,22 +31,9 @@
 using namespace esb;
 
 
-#ifdef NDEBUG
-#	ifdef ESB_RELEASE_BUILD
-#		pragma comment(lib, "../lib/ReleaseBuild/esbhlp.lib")
-#	else
-#		pragma comment( lib , "../lib/release/esbhlp.lib")
-		//Поскольку мы и в релизе используем MessageBox, то нам нужна еще user32.lib
-#		pragma comment(lib,"user32.lib")
-#	endif
-#else
-#	pragma comment( lib , "../lib/debug/esbhlp.lib")
-#endif // NDEBUG
 
-
-#ifndef ESB_RELEASE_BUILD
-// esbhlp/release/esbhlp.lib - это "assertion build" - то есть ESB_ASSERT оттуда не убран и необходим. Фактически отличается только runtime библиотекой
-// Это временное решение на период отладки и тестирования. Впоследствии release-build будет чист от ассертов. (или будем делать ESB_RELEASE_BUILD)
+#ifndef NDEBUG
+// в режиме дебаг ассерты есбхлп передаются на этот esb_assert_handler
 ESB_NORETURN void esb_assert_handler(uint32_t line_) {
 	//												 4294967295
 	wchar_t mbuf[] = L"Unexpected in esbhlp, line: ""          ";
@@ -61,7 +50,7 @@ ESB_NORETURN void esb_assert_handler(uint32_t line_) {
 	// от греха насовали int3 после каждого ее вызова.
 	__debugbreak();
 }
-#endif	//#ifndef ESB_RELEASE_BUILD
+#endif
 
 
 
@@ -584,7 +573,7 @@ DelegatToMeth CreateDelegatToMeth(const CommonModule& module_, const String meth
 //		то без разницы кто его преобразует - авто-преобразователь на входе в метод или он в теле метода тихо преобразуется.
 //		И только если аргумент передается методам платформы более одного раза, то тогда имеет смысл привести его к виду Var<Numeric> только один раз и далее только отдавать.
 void ResultArrayAddEx(Array& arr_, const Var<String>& tag_, const Var<Numeric>& val_) {
-	const Var<String> keys(L"TAG,VAL");
+	const Var<String> keys(ESB_T("TAG,VAL"));
 	//Здесь плюсам надо подсказать, чтобы попробовала преобразование к Arbitrary. Само не понимает.. 
 	Var<FixedStructure> s = FixedStructure::Create<Arbitrary, Arbitrary>(keys, tag_, val_);
 	arr_.Add(s);
@@ -606,11 +595,11 @@ void ResultArraySort(Array arr_) {
 		// самое простое и эффективное - обращение к полю структуры по его индексу (от 0). При этом, естесственно, нужно быть железобетонно уверенным что это "наша" структура.
 		Arbitrary va = sa.Field[1];
 		// также можно получить этот индекс из строки. Если такого поля нет, то -1.
-		int ixVAL = sb.GetFieldId(String(L"VAL"));
+		int ixVAL = sb.GetFieldId(String(ESB_T("VAL")));
 		assert(ixVAL == 1);
 		Arbitrary vb = sb.Field[(unsigned)ixVAL];
 		// также можно получить ссылку-ацессор на поле структуры как отдельный объект
-		auto b_field_val = sb[L"VAL"];
+		auto b_field_val = sb[ESB_T("VAL")];
 		//проверить что он привязался к полю
 		assert(b_field_val);	// b_field_val.isOk(); 
 		// Если ОК, то можно использовать GetId (или св-во Id) - вернут индекс поля. Если не ОК, то методы GetId возбудят исключние!
@@ -627,14 +616,14 @@ class ResultStruct {
 public:
 	ResultStruct(FixedStructure&& stru_) : m_stru(std::move(stru_)) {}
 	ResultStruct(Arbitrary&& x_) : m_stru(std::move(x_).make<FixedStructure>()) {}
-	bool isOk() const			{ return (m_stru.GetFieldId(String(L"TAG")) == 0 && m_stru.GetFieldId(String(L"VAL")) == 1); }
+	bool isOk() const			{ return (m_stru.GetFieldId(String(ESB_T("TAG"))) == 0 && m_stru.GetFieldId(String(ESB_T("VAL"))) == 1); }
 	String GetTAG() const		{ return m_stru.GetField(0).make<String>(); }
 	Numeric GetVAL() const		{ return m_stru.GetField(1).make<Numeric>(); }
 };
 
 void ResultArrayShow(const Array& arr_) {
 	// Нам должны были передать массив структур TAG,VAL с текстом (описанием) результата в поле TAG и числовым значение в поле VAL.
-	constexpr size_t line_len_ = strview_t(L"сообщить(* --------------------------------------------------------------------------------------------------------------);").size();
+	constexpr size_t line_len_ = strview_t(ESB_T("сообщить(* --------------------------------------------------------------------------------------------------------------);")).size();
 	// "без лишего шума и пыли" (выделения памяти) - рекурсивно
 	struct result_maker {
 		const size_t&	line_len_;
@@ -643,12 +632,12 @@ void ResultArrayShow(const Array& arr_) {
 		result_maker(const size_t& l_, const Array& a_) : line_len_(l_), arr_(a_), arr_size_(a_.Size()) {}
 		size_t			m_TagMax = 0;
 		size_t			m_ValMax = 0;
-		std::wstring	m_ValMaxStr;
+		esb::string_t	m_ValMaxStr;
 		size_t			m_nStarMax = 0;
-		std::wstring	m_res;
+		esb::string_t	m_res;
 		void make_recursive(size_t irow_) {
 			if (irow_ == arr_size_) {
-				m_ValMaxStr = std::to_wstring(m_ValMax);
+				m_ValMaxStr = to_ustring(m_ValMax);
 				m_nStarMax = line_len_ - m_TagMax - m_ValMaxStr.length() - 5; // _:_
 				m_res.reserve(line_len_ * (arr_size_ - 1));
 				return;
@@ -656,7 +645,7 @@ void ResultArrayShow(const Array& arr_) {
 			else {
 				ResultStruct s = arr_.At[irow_].make<FixedStructure>();
 				assert(s.isOk());
-				const std::wstring_view& tag = s.GetTAG().view_when_safe();
+				const strview_t& tag = s.GetTAG().view_when_safe();
 				size_t tag_len = tag.length();					if (tag_len > m_TagMax) m_TagMax = tag_len;
 				size_t val = static_cast<int>(s.GetVAL());		if (val > m_ValMax) m_ValMax = val;
 				make_recursive(++irow_);
@@ -664,28 +653,28 @@ void ResultArrayShow(const Array& arr_) {
 				m_res.append(tag);
 				if(tag_len < m_TagMax)
 					m_res.append((unsigned) m_TagMax- tag_len, L' ');
-				m_res.append(L" : ");
+				m_res.append(ESB_T(" : "));
 				if (val == m_ValMax)
 					m_res.append(m_ValMaxStr);
 				else {
-					std::wstring val_str = std::to_wstring(val);
+					string_t val_str = to_ustring(val);
 					if(size_t lfmt = (unsigned)m_ValMaxStr.length() - val_str.length()) 
-						m_res.append(lfmt, L' ');
+						m_res.append(lfmt, ESB_T(' '));
 					m_res.append(val_str);
 				}
-				m_res.append(L": ");
+				m_res.append(ESB_T(": "));
 				size_t nStar = 1 + (m_nStarMax * val) / (m_ValMax+1);
-				m_res.append(nStar, L'*');
-				m_res += L"\n";
+				m_res.append(nStar, ESB_T('*'));
+				m_res += ESB_T("\n");
 			}
 		}
-		std::wstring operator()() {
+		string_t operator()() {
 			make_recursive(0);
 			return std::move(m_res);
 		}
 	};
 
-	std::wstring res = result_maker(line_len_, arr_)();
+	string_t res = result_maker(line_len_, arr_)();
 	Message(String(res));
 }
 
@@ -705,8 +694,8 @@ ValueTable CreateResultTable(const Array& results_array_)
 	TypeDescription td_numeric = TypeDescription::Create(array_of_types, qn);
 
 	ValueTable vt = ValueTable::Create();
-	vt.Columns.Add(String(L"Текст"), td_string, String(L"Column-1"));
-	vt.Columns.Add(String(L"Значение"), td_numeric, String(L"Column-2"), Numeric(20));
+	vt.Columns.Add(String(ESB_T("Текст")), td_string, String(ESB_T("Column-1")));
+	vt.Columns.Add(String(ESB_T("Значение")), td_numeric, String(ESB_T("Column-2")), Numeric(20));
 
 	size_t crows = results_array_.Size();
 	for (size_t irow = 0; irow < crows; ++irow) {
@@ -724,6 +713,8 @@ ValueTable CreateResultTable(const Array& results_array_)
 void SaveResultsToFile(const Array& results_array_) {			
 	static_assert(sizeof(strview_t::value_type) == 2 && sizeof(unsigned) == 4, "write_to_bb alg requirement!");
 
+	//assert(false);
+
 	size_t c_wchars = 2; //FF FE
 	for (auto x : results_array_) {	
 		ResultStruct s = ResultStruct(std::move(x).make<FixedStructure>());
@@ -734,6 +725,7 @@ void SaveResultsToFile(const Array& results_array_) {
 	}
 
 	BinaryDataBuffer	bb = BinaryDataBuffer::Create(Numeric(c_wchars * sizeof(strchar_t)));
+	
 	size_t				i_byte = 0;
 	auto write_to_bb = [&bb, &i_byte](const strview_t& str_) -> void {
 		const uint8_t* pb = (uint8_t*)str_.data();
@@ -750,21 +742,21 @@ void SaveResultsToFile(const Array& results_array_) {
 	for (ResultStruct s : results_array_) {		// здесь мы второй раз проходим по массиву и тип его уже проверен. поэтому сразу создаем нашу структуру
 		String tag = s.GetTAG();
 		write_to_bb(tag.view());
-		write_to_bb(L"\t");
+		write_to_bb(ESB_T("\t"));
 		signed ival = static_cast<signed>(s.GetVAL());
 		if (ival < 0)
 			ESL_THROW_UNEXPECTED();
-		std::wstring val = std::to_wstring( static_cast<unsigned>(ival) );
+		string_t val = to_ustring( static_cast<unsigned>(ival) );
 		write_to_bb(val);
-		write_to_bb(L"\n");
+		write_to_bb(ESB_T("\n"));
 	}
 
 	// ЕСБ позволяет писать код "ну почти как в 1С", но для с++ это чудовищно неэффективный код. просто мясорубка и мешанина вызовов платформы.
 	String		s_db = Upper(InfoBaseConnectionString());
-	Numeric		pos_1 = StrFind(s_db, String(L"FILE="));				//len=6
-	Numeric		pos_e = StrFind(s_db, String(L"\\"), SearchDirectionEnum::FromEnd);
+	Numeric		pos_1 = StrFind(s_db, String(ESB_T("FILE=")));				//len=6
+	Numeric		pos_e = StrFind(s_db, String(ESB_T("\\")), SearchDirectionEnum::FromEnd);
 	string_t	s_dir = Mid(s_db, pos_1 + Numeric(6), pos_e - pos_1 - Numeric(6)).string();
-	String		s_file = String(s_dir + L"\\test_info.txt");
+	String		s_file = String(s_dir + ESB_T("\\test_info.txt"));
 
 	FileStream fs = FileStream::Create(s_file, FileOpenModeEnum::OpenOrCreate);
 	fs.SetSize(Numeric::Value_0_);
@@ -772,7 +764,7 @@ void SaveResultsToFile(const Array& results_array_) {
 	fs.Flush();
 	fs.Close();
 
-	Message(String(L"Таблица результатов сохранена как:"));
+	Message(String(ESB_T("Таблица результатов сохранена как:")));
 	Message(s_file);
 }
 
@@ -780,7 +772,7 @@ void SaveResultsToFile(const Array& results_array_) {
 // просто тестирование объекта Query и QueryResult
 Array SelectTestArrayOfNumeric() {
 	Query qry = Query::Create();
-	qry.Text = String(L"ВЫБРАТЬ ТестовыйНабор.Значение КАК Значение ИЗ РегистрСведений.ТестовыйНабор КАК ТестовыйНабор");
+	qry.Text = String(ESB_T("ВЫБРАТЬ ТестовыйНабор.Значение КАК Значение ИЗ РегистрСведений.ТестовыйНабор КАК ТестовыйНабор"));
 	auto qry_res = qry.Execute().make<QueryResult>();
 	auto rec = qry_res.Select();
 	Numeric crec = rec.Count();
@@ -807,14 +799,15 @@ esb::Numeric GetTicks() {
 // Ниже демонстрируется также привязка "свободных" функций к интерфейсу объекта
 struct DemoAddin {
 	static String GetHellow() {
-		return String(L"Привет мир!");
+		return String(ESB_T("Привет мир!"));
 	}
 	static Numeric Mul(const Numeric& a, const Numeric& b) {
 		return a * b;
 	}
 	static Numeric Div(const Numeric& a, const Numeric& b) {
 		if (b == 0)
-			ESL_THROW_DIV_BY_ZERO();
+			//ESL_THROW_DIV_BY_ZERO();
+			return 0;
 		else
 			return a / b;
 	}
@@ -825,8 +818,8 @@ struct interface_info_t<DemoAddin> {
 	//
 	// {41436F3F-36DB-46B8-AE15-53D6A5FF3536}
 	ESB_DEFINE_GUID(static constexpr UniqueTypeId	TypeId_,			0x41436f3f, 0x36db, 0x46b8, 0xae, 0x15, 0x53, 0xd6, 0xa5, 0xff, 0x35, 0x36);
-	static constexpr UniqueTypeTerm					TypeTerm_			{ L"EsbDemo", L"ЕсбДемо" };
-	static constexpr std::wstring_view				TypeDescriptionInit_{ L"Объект ЕСБ Демо" };
+	static constexpr UniqueTypeTerm					TypeTerm_			{ ESB_T("EsbDemo"), ESB_T("ЕсбДемо") };
+	static constexpr strview_t						TypeDescriptionInit_{ ESB_T("Объект ЕСБ Демо") };
 
 	static constexpr auto							InterfaceMethMeta_ = make_meta_interface_meth(
 		ESB_META_INTERFACE_STAT_METH(GetHellow,											"ДайПривет"),
@@ -873,8 +866,8 @@ const AddinDescriptor AddinDescriptor::Instance_{ std::type_identity<dispinterfa
 //1C Компонента
 //---------------------------------------------------------------------------
 #include "..\esbldr.h"
-const std::wstring_view EsbComponent::ComponentName_	= L"EsbDemoComponent";
-const WCHAR_T			EsbComponent::AddinName_[]		= WCHAR_T_STRING("1");		// L"esb";
+const strview_t			EsbComponent::ComponentName_	= ESB_T("EsbDemoComponent");
+const WCHAR_T			EsbComponent::AddinName_[]		= ESB_T("1");		// L"esb";
 IAddInDefBase*			EsbComponent::AppConnect_		= nullptr;
 IMemoryManager*			EsbComponent::AppMemoryManager_ = nullptr;
 AppCapabilities			EsbComponent::AppCapabilities_	= AppCapabilities::eAppCapabilitiesInvalid;
@@ -890,7 +883,8 @@ const WCHAR_T* GetClassNames() {
 long GetClassObject(const WCHAR_T* name_, IComponentBase** ppComponent) {
 	if (ppComponent && *ppComponent==NULL && name_ && name_[0] == L'1' && name_[1] == L'\0') {
 		*ppComponent = &EsbComponent::getInstance();
-		return (long)*ppComponent;
+		//return (long)*ppComponent;
+		return 1;
 	}
 	return 0;
 }

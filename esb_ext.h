@@ -90,7 +90,7 @@ namespace esb
 	template<class T>
 	inline constexpr bool ext_has_type_toStringCreate = ext_has_type_to<T, String>;
 	template<class T>
-	inline constexpr bool ext_has_type_toStringConvert = requires(T& t) { std::to_wstring(t); };
+	inline constexpr bool ext_has_type_toStringConvert = requires(T& t) { to_ustring(t); };
 	template<class T>
 	inline constexpr bool ext_has_type_toString = ext_has_type_toStringCreate<T> || ext_has_type_toStringConvert<T>;
 
@@ -107,7 +107,7 @@ namespace esb
 	template<class T>
 	inline constexpr bool ext_has_data_toStringCreate = ext_has_data_to<T, String>;
 	template<class T>
-	inline constexpr bool ext_has_data_toStringConvert = (ext_has_Data<T> && requires(T & t) { std::to_wstring(t.ESB_CONTAINED_DATA_ACCESSOR_NAME()); });
+	inline constexpr bool ext_has_data_toStringConvert = (ext_has_Data<T> && requires(T & t) { to_ustring(t.ESB_CONTAINED_DATA_ACCESSOR_NAME()); });
 	template<class T>
 	inline constexpr bool ext_has_data_toString = ext_has_data_toStringCreate<T> || ext_has_data_toStringConvert<T>;
 
@@ -166,11 +166,11 @@ namespace esb
 		else if constexpr (ext_has_type_toStringCreate<ExtValueT>)
 			return String{ value_ };
 		else if constexpr (ext_has_type_toStringConvert<ExtValueT>)
-			return String{ std::to_wstring(value_) };
+			return String{ to_ustring(value_) };
 		else if constexpr (ext_has_data_toStringCreate<ExtValueT>)
 			return String{ value_.ESB_CONTAINED_DATA_ACCESSOR_NAME() };
 		else if constexpr (ext_has_data_toStringConvert<ExtValueT>)
-			return String{ std::to_wstring(value_.ESB_CONTAINED_DATA_ACCESSOR_NAME()) };
+			return String{ to_ustring(value_.ESB_CONTAINED_DATA_ACCESSOR_NAME()) };
 		else
 			static_assert(always_false_v<ExtValueT>, "Value not convertable to String any way!");
 	}
@@ -208,9 +208,9 @@ namespace esb
 		static_assert(has_meth_ToNumeric<_test_long_t>);
 
 		struct _test_text_t {
-			std::wstring m_data;
-			std::wstring& Data()				{ return m_data; }
-			const std::wstring& Data() const	{ return m_data; }
+			string_t m_data;
+			string_t& Data()				{ return m_data; }
+			const string_t& Data() const	{ return m_data; }
 		};
 		constexpr bool _test_text_t_to_string = ext_has_data_toString<_test_text_t>;
 		static_assert(_test_text_t_to_string, " ! ext_has_data_toString<_test_text_t> ");
@@ -322,11 +322,11 @@ ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY()
 		using TypeDescriptorValueObject::NewValueBaseInplace;
 
 		static constexpr size_t						PropCount(const ExtValueObjectBase&)								{ return dispinterface_impl_prop_count<interface_t>(); }
-		static constexpr int						PropFind(const ExtValueObjectBase&, const std::wstring_view& name_)	{ return dispinterface_impl_prop_find<interface_t>(name_); }
+		static constexpr int						PropFind(const ExtValueObjectBase&, const strview_t& name_)			{ return dispinterface_impl_prop_find<interface_t>(name_); }
 		static constexpr const DispInfoMembProp*	Prop(const ExtValueObjectBase&, int prop_)							{ return dispinterface_impl_memb_prop<interface_t>(prop_); }
 
 		static constexpr size_t						MethCount(const ExtValueObjectBase&)								{ return dispinterface_impl_meth_count<interface_t>(); }
-		static constexpr int						MethFind(const ExtValueObjectBase&, const std::wstring_view& name_)	{ return dispinterface_impl_meth_find<interface_t>(name_); }
+		static constexpr int						MethFind(const ExtValueObjectBase&, const strview_t& name_)			{ return dispinterface_impl_meth_find<interface_t>(name_); }
 		static constexpr const DispInfoMembMeth*	Meth(const ExtValueObjectBase&, int meth_)							{ return dispinterface_impl_memb_meth<interface_t>(meth_); }
 		// мы единственный источник создания ext_value_t - и для TypeDef (из спп) и для ExtInvoker4CtorFromTypePack (из 1С)
 		template<typename... ArgsT>

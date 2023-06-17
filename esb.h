@@ -757,6 +757,8 @@ namespace esb {
 	};
 
 
+	//TODO: в начиная с версии 8.3.14. Интерфейс расширился и углубился.
+	//
 	class Picture : public Object {
 		ESB_CLASS_IMPLEMENT_MAKE_OBJ(Picture)
 		ESB_CLASS_IMPLEMENT_MAKE_OPT(Picture)
@@ -856,23 +858,74 @@ namespace esb {
 
 
 
+// 1C АПИ это весьма и весьма неконсервативная часть платформы. Часто и непредсказуемо может меняться. 
+// Фактически для каждой очередной версии нужно проверять не сбились ли идентификаторы методов. 
+// Сейчас в есб идентификаторы от v8.3.9.1818. У 8.3.23.1688 они наполовину другие. 
+// Когда произошли изменения нужно разбираться фактически с каждой промежуточной версией.
+// Это можно сделать при необходимости. А пока, для ESB_VER_v8300 мы разрешим все, а для последующих все запретим.
+// (за исключением используемых в демо функций - InfoBaseConnectionString, StrFind, Message.
+
+#ifndef ESB_USE_API_ALL
+#	if ESB_VER == ESB_VER_v8300
+#		define ESB_USE_API_ALL		1
+#	endif
+#endif // !ESB_USE_API_ALL
+
+
+#if defined(ESB_USE_API_ALL) && ESB_USE_API_ALL
+#	define ESB_API_INCLUDE_core		1
+#	define ESB_API_INCLUDE_addin	1
+#	define ESB_API_INCLUDE_mngui	1
+#	define ESB_API_INCLUDE_backend	1 
+#	define ESB_API_INCLUDE_entext2	1
+#	define ESB_API_INCLUDE_extui	1
+#	define ESB_API_INCLUDE_frntend	1
+#	define ESB_API_INCLUDE_mngbase	1
+#	define ESB_API_INCLUDE_mngcore	1
+#	define ESB_API_INCLUDE_odata	1
+#	define ESB_API_INCLUDE_xml2		1
+#	define ESB_API_INCLUDE_ext		1
+#else
+#	ifndef ESB_API_INCLUDE_core
+#		define ESB_API_INCLUDE_core			0
+#	endif
+#	ifndef ESB_API_INCLUDE_addin
+#		define ESB_API_INCLUDE_addin		0
+#	endif
+#	ifndef ESB_API_INCLUDE_mngui
+#		define ESB_API_INCLUDE_mngui		0
+#	endif
+#	ifndef ESB_API_INCLUDE_backend
+#		define ESB_API_INCLUDE_backend		0
+#	endif
+#	ifndef ESB_API_INCLUDE_entext2
+#		define ESB_API_INCLUDE_entext2		0
+#	endif
+#	ifndef ESB_API_INCLUDE_extui
+#		define ESB_API_INCLUDE_extui		0
+#	endif
+#	ifndef ESB_API_INCLUDE_frntend
+#		define ESB_API_INCLUDE_frntend		0
+#	endif
+#	ifndef ESB_API_INCLUDE_mngbase
+#		define ESB_API_INCLUDE_mngbase		0
+#	endif
+#	ifndef ESB_API_INCLUDE_mngcore
+#		define ESB_API_INCLUDE_mngcore		0
+#	endif
+#	ifndef ESB_API_INCLUDE_odata
+#		define ESB_API_INCLUDE_odata		0
+#	endif
+#	ifndef ESB_API_INCLUDE_xml2
+#		define ESB_API_INCLUDE_xml2			0
+#	endif
+#	ifndef ESB_API_INCLUDE_ext
+#		define ESB_API_INCLUDE_ext			0
+#	endif
+#endif
 
 
 
-
-//TOBE: Возможно все таки нужно сделать некоторое примитивное конфигурирование:
-//#define ESB_API_USE_ALL 0
-// 
-//#define ESB_API_USE_core 0
-//#define ESB_API_USE_addin 0
-//#define ESB_API_USE_mngui 0
-//#define ESB_API_USE_backend 0
-//#define ESB_API_USE_entext2 0
-//#define ESB_API_USE_frntend 0
-//#define ESB_API_USE_mngbase 0
-//#define ESB_API_USE_odata 0
-//#define ESB_API_USE_xml2 0
-//#define ESB_API_USE_ext 0
 
 //NOTE: По многим и многим функциям аргументы по-умолчанию задекларированы как DefUndef<...> и для многих и многих функций это правильно.
 //		НО!! Для некоторых функций аргументы по-умолчанию нужно указывать конкретно. Пример:
@@ -905,8 +958,46 @@ namespace esb //API part
 
 #define ESB_INVOKE_API_PROP_GET(T_, P_, M_)						return check_and_make<T_>(esb_api::Provider<esb_api::ProviderId::##P_##>::invoke_prop_get(M_))
 
-// api from providers
 
+
+//StrFind сдвинулось на 1 (F31StrFindAndHighlightByAppearance вставили перед ней). было 4 стало 5
+//StrCompare также
+//СтрНайтиИВыделитьОформлением(StrFindAndHighlightByAppearance)
+//	Доступен, начиная с версии 8.3.15.
+#if !ESB_API_INCLUDE_core
+#	if ESB_VER < ESB_VER_v8315
+#		define ESB_IDOFFS 0
+#	else
+#		define ESB_IDOFFS 1
+#	endif
+	// Функция СтрНайти(Строка_ Как Строка, ПодстрокаПоиска_ Как Строка, НаправлениеПоиска_ Как НаправлениеПоиска, НачальнаяПозиция_ Как Число, НомерВхождения_ Как Число) Возвращает Число
+	inline Numeric StrFind(ConstPara<String> Line_, ConstPara<String> SearchSubstring_, ConstPara<SearchDirectionValue> SearchDirection_ = SearchDirectionEnum::FromBegin, ConstPara<Numeric> StartIndex_ = DefUndef<Numeric>, ConstPara<Numeric> EntryNumber_ = Numeric::Value_1_) 
+							{ ESB_INVOKE_API_FUNC5(Numeric, core, 4 + ESB_IDOFFS, Line_, SearchSubstring_, SearchDirection_, StartIndex_, EntryNumber_); }
+	// Функция СтрСравнить(Строка1_ Как Строка, Строка2_ Как Строка) Возвращает Число
+	inline Numeric StrCompare(ConstPara<String> String1_, ConstPara<String> String2_) { ESB_INVOKE_API_FUNC2(Numeric, core, 6 + ESB_IDOFFS, String1_, String2_); }
+#undef ESB_IDOFFS
+#endif
+
+//InfoBaseConnectionString сдвинулось на 1 (F17TempFilesDirAsync вставили между P24BeginGettingTempFilesDir и F17CurrentLocaleCode)
+// 	   Глобальный контекст.КаталогВременныхФайловАсинх (Global context.TempFilesDirAsync)
+// 	   Доступен, начиная с версии 8.3.18.
+//Message не сдвинулось
+#if !ESB_API_INCLUDE_backend
+	// Функция СтрокаСоединенияИнформационнойБазы() Возвращает Строка
+#	if ESB_VER < ESB_VER_v8318
+		inline String InfoBaseConnectionString() { ESB_INVOKE_API_FUNC0(String, backend, 29); }
+#	else
+		inline String InfoBaseConnectionString() { ESB_INVOKE_API_FUNC0(String, backend, /*29*/ 30); }
+#	endif
+	// Процедура Сообщить(ТекстСообщения_ Как Строка, Статус_ Как СтатусСообщения)
+	inline void Message(ConstPara<String> MessageText_, ConstPara<MessageStatusValue> Status_ = DefUndef<MessageStatusValue>) { ESB_INVOKE_API_PROC2(backend, 4, MessageText_, Status_); }
+#endif
+
+
+
+
+// api from providers
+#if ESB_API_INCLUDE_core
 	// Процедура ЗаполнитьЗначенияСвойств(Приемник_ Как Произвольный, Источник_ Как Произвольный, СписокСвойств_ Как Строка, ИсключаяСвойства_ Как Строка)
 	inline void FillPropertyValues(ConstPara<Arbitrary> Receiver_, ConstPara<Arbitrary> Source_, ConstPara<String> ListOfProperties_ = DefUndef<String>, ConstPara<String> ExcludeProperties_ = DefUndef<String>) { ESB_INVOKE_API_PROC4(core, 0, Receiver_, Source_, ListOfProperties_, ExcludeProperties_); }
 	// Функция Base64Строка(Значение_ Как ДвоичныеДанные) Возвращает Строка
@@ -924,14 +1015,24 @@ namespace esb //API part
 	// Функция СтрСоединить(Строки_ Как [ФиксированныйМассив,Массив], Разделитель_ Как Строка) Возвращает Строка
 	inline String StrConcat(ConstPara<FixedArray> Strings_, ConstPara<String> Separator_ = DefUndef<String>) { ESB_INVOKE_API_FUNC2(String, core, 10, Strings_, Separator_); }
 	inline String StrConcat(ConstPara<Array> Strings_, ConstPara<String> Separator_ = DefUndef<String>) { ESB_INVOKE_API_FUNC2(String, core, 10, Strings_, Separator_); }
+
+	// эти функции зависят от типов esb_file. здесь только объявления, а определения там
+	//
+		// Функция Base64Значение(Строка_ Как Строка) Возвращает ДвоичныеДанные
+	inline BinaryData Base64Value(ConstPara<String> Line_);
+	//...
+#endif	//ESB_API_INCLUDE_core
+
+#if ESB_API_INCLUDE_addin
 	// Функция ПодключитьВнешнююКомпоненту(Местоположение_ Как Строка, Имя_ Как Строка, Тип_ Как ТипВнешнейКомпоненты) Возвращает Булево
 	inline Boolean AttachAddIn(ConstPara<String> Location_, ConstPara<String> Name_, ConstPara<AddInTypeValue> Type_ = DefUndef<AddInTypeValue>) { ESB_INVOKE_API_FUNC3(Boolean, addin, 0, Location_, Name_, Type_); }
 	// Процедура ЗагрузитьВнешнююКомпоненту(ИмяФайла_ Как Строка)
 	inline void LoadAddIn(ConstPara<String> FileName_) { ESB_INVOKE_API_PROC1(addin, 1, FileName_); }
 	// Процедура НачатьПодключениеВнешнейКомпоненты(ОписаниеОповещения_ Как ОписаниеОповещения, Местоположение_ Как Строка, Имя_ Как Строка, Тип_ Как ТипВнешнейКомпоненты)
 	inline void BeginAttachingAddIn(ConstPara<NotifyDescription> NotifyDescription_, ConstPara<String> Location_, ConstPara<String> Name_, ConstPara<AddInTypeValue> Type_ = DefUndef<AddInTypeValue>) { ESB_INVOKE_API_PROC4(addin, 2, NotifyDescription_, Location_, Name_, Type_); }
+#endif	//ESB_API_INCLUDE_addin
 
-
+#if ESB_API_INCLUDE_mngui
 	// Функция ПолучитьФайл(Адрес_ Как Строка, ИмяФайла_ Как Строка, Интерактивно_ Как Булево) Возвращает [Булево,Неопределено]
 	inline UndefOr<Boolean> GetFile(ConstPara<String> Address_, ConstPara<String> FileName_ = DefUndef<String>, ConstPara<Boolean> Interactively_ = DefUndef<Boolean>) { ESB_INVOKE_API_FUNC3(UndefOr<Boolean>, mngui, 3, Address_, FileName_, Interactively_); }
 	// Функция ПоместитьФайл(Адрес_ Как Строка, НачальноеИмяФайла_ Как Строка, ВыбранноеИмяФайла_ Как Строка, Интерактивно_ Как Булево, УникальныйИдентификаторФормы_ Как УникальныйИдентификатор) Возвращает Булево
@@ -969,8 +1070,9 @@ namespace esb //API part
 	inline Boolean RequestUserPermission(ConstPara<Array> Calls_) { ESB_INVOKE_API_FUNC1(Boolean, mngui, 29, Calls_); }
 	// Процедура НачатьЗапросРазрешенияПользователя(ОписаниеОповещения_ Как ОписаниеОповещения, Вызовы_ Как Массив)
 	inline void BeginRequestingUserPermission(ConstPara<NotifyDescription> NotifyDescription_, ConstPara<Array> Calls_) { ESB_INVOKE_API_PROC2(mngui, 30, NotifyDescription_, Calls_); }
+#endif	//ESB_API_INCLUDE_mngui
 
-
+#if ESB_API_INCLUDE_backend
 	// Процедура ЗафиксироватьТранзакцию()
 	inline void CommitTransaction() { ESB_INVOKE_API_PROC0(backend, 1); }
 	// Процедура ОтменитьТранзакцию()
@@ -1128,7 +1230,23 @@ namespace esb //API part
 	// Функция ПолучитьДополнительныйПараметрКлиентаЛицензирования() Возвращает Строка
 	inline String GetLicensingClientAdditionalParameter() { ESB_INVOKE_API_FUNC0(String, backend, 108); }
 
+	// Функция ПолучитьИмяВременногоФайла(Расширение_ Как Строка) Возвращает Строка
+	// (конфликтует с WinApi GetTempFileName поэтому имя изменено)
+	inline String GetTempFileNameFrom1C(ConstPara<String> Extension_) { ESB_INVOKE_API_FUNC1(String, backend, 87, Extension_); }
 
+	// Функция СмещениеСтандартногоВремени(ЧасовойПояс_ Как [Строка,Неопределено], УниверсальноеВремя_ Как [Дата,Неопределено]) Возвращает Дата
+	inline DateTime StandardTimeOffset(ConstPara<String> TimeZone_ = DefUndef<String>, ConstPara<DateTime> UniversalTime_ = DefUndef<DateTime>) { ESB_INVOKE_API_FUNC2(DateTime, backend, 85, TimeZone_, UniversalTime_); }
+
+	// эти функции зависят от типов esb_data. здесь только объявления, а определения там
+	// 
+	// Функция НайтиПоСсылкам(СписокСсылок_ Как Массив, ОбластьПоиска_ Как Массив, ВключитьОбъекты_ Как Массив, ИсключитьОбъекты_ Как Массив) Возвращает ТаблицаЗначений
+	inline ValueTable FindByRef(ConstPara<Array> ReferenceList_, ConstPara<Array> SearchArea_ = DefUndef<Array>, ConstPara<Array> IncludeObjects_ = DefUndef<Array>, ConstPara<Array> ExcludeObjects_ = DefUndef<Array>);
+	// Функция ПолучитьСтруктуруХраненияБазыДанных(ОбъектыМетаданных_ Как Массив, ИменаБазыДанных_ Как Булево) Возвращает ТаблицаЗначений
+	inline ValueTable GetDBStorageStructureInfo(ConstPara<Array> MetadataObjects_, ConstPara<Boolean> DBMSNames_ = DefUndef<Boolean>);
+#endif	//ESB_API_INCLUDE_backend
+
+
+#if ESB_API_INCLUDE_entext2
 	// Функция КодироватьСтроку(Строка_ Как Строка, СпособКодированияСтроки_ Как СпособКодированияСтроки, КодировкаСтроки_ Как Строка) Возвращает Строка
 	inline String EncodeString(ConstPara<String> String_, ConstPara<StringEncodingMethodValue> StringEncodingMethod_, ConstPara<String> StringEncoding_ = DefUndef<String>) { ESB_INVOKE_API_FUNC3(String, entext2, 0, String_, StringEncodingMethod_, StringEncoding_); }
 	// Функция РаскодироватьСтроку(Строка_ Как Строка, СпособКодированияСтроки_ Как СпособКодированияСтроки, КодировкаСтроки_ Как Строка) Возвращает Строка
@@ -1137,6 +1255,10 @@ namespace esb //API part
 	inline String GetServerAllFilesMask() { ESB_INVOKE_API_FUNC0(String, entext2, 2); }
 	// Функция ПолучитьРазделительПутиСервера() Возвращает Строка
 	inline String GetServerPathSeparator() { ESB_INVOKE_API_FUNC0(String, entext2, 3); }
+#endif	//ESB_API_INCLUDE_entext2
+
+
+#if ESB_API_INCLUDE_extui
 	// Процедура УстановитьРасширениеРаботыСКриптографией()
 	inline void InstallCryptoExtension() { ESB_INVOKE_API_PROC0(extui, 0); }
 	// Процедура НачатьУстановкуРасширенияРаботыСКриптографией(ОписаниеОповещенияОЗавершении_ Как ОписаниеОповещения)
@@ -1145,6 +1267,10 @@ namespace esb //API part
 	inline Boolean AttachCryptoExtension() { ESB_INVOKE_API_FUNC0(Boolean, extui, 2); }
 	// Процедура НачатьПодключениеРасширенияРаботыСКриптографией(ОписаниеОповещения_ Как ОписаниеОповещения)
 	inline void BeginAttachingCryptoExtension(ConstPara<NotifyDescription> NotifyDescription_) { ESB_INVOKE_API_PROC1(extui, 3, NotifyDescription_); }
+#endif	//ESB_API_INCLUDE_extui
+
+
+#if ESB_API_INCLUDE_frntend
 	// Процедура Предупреждение(ТекстПредупреждения_ Как [Строка,ФорматированнаяСтрока], Таймаут_ Как Число, Заголовок_ Как Строка)
 	inline void DoMessageBox(ConstPara<String> MessageText_, ConstPara<Numeric> Timeout_ = DefUndef<Numeric>, ConstPara<String> Title_ = DefUndef<String>) { ESB_INVOKE_API_PROC3(frntend, 0, MessageText_, Timeout_, Title_); }
 	inline void DoMessageBox(ConstPara<FormattedString> MessageText_, ConstPara<Numeric> Timeout_ = DefUndef<Numeric>, ConstPara<String> Title_ = DefUndef<String>) { ESB_INVOKE_API_PROC3(frntend, 0, MessageText_, Timeout_, Title_); }
@@ -1237,6 +1363,23 @@ namespace esb //API part
 	inline void AttachLicensingClientParametersRequestHandler(ConstPara<String> ProcedureName_) { ESB_INVOKE_API_PROC1(frntend, 49, ProcedureName_); }
 	// Процедура ОтключитьОбработчикЗапросаНастроекКлиентаЛицензирования()
 	inline void DetachLicensingClientParametersRequestHandler() { ESB_INVOKE_API_PROC0(frntend, 50); }
+
+	// Свойство [[Чтение,Запись]] РабочаяДата Как Дата
+	// *Доступно для записи в случае, если свойство ИспользованиеРабочейДаты имеет значение Назначать
+	inline DateTime GetWorkingDate() { ESB_INVOKE_API_PROP_GET(DateTime, frntend, 1); }
+	// Свойство [[Только Чтение]] ПараметрЗапуска Как Строка
+	inline String GetLaunchParameter() { ESB_INVOKE_API_PROP_GET(String, frntend, 4); }
+
+	// эти функции зависят от типов esb_data. здесь только объявления, а определения там
+	// 
+	// Функция ПользователиWindows() Возвращает [ТаблицаЗначений,Массив]
+	inline ClassMix<ValueTable, Array> WindowsUsers();
+	// Функция ПользователиОС() Возвращает [ТаблицаЗначений,Массив]
+	inline ClassMix<ValueTable, Array> OSUsers();
+#endif	//ESB_API_INCLUDE_frntend
+
+
+#if ESB_API_INCLUDE_mngbase
 	// Функция ПолучитьФункциональнуюОпцию(Имя_ Как Строка, Параметры_ Как Структура) Возвращает Произвольный
 	inline Arbitrary GetFunctionalOption(ConstPara<String> Name_, ConstPara<Structure> Parameters_ = DefUndef<Structure>) { ESB_INVOKE_API_FUNC2(Arbitrary, mngbase, 2, Name_, Parameters_); }
 	// Функция ПоместитьВоВременноеХранилище(Данные_ Как Произвольный, Адрес_ Как [УникальныйИдентификатор,Строка]) Возвращает Строка
@@ -1258,6 +1401,15 @@ namespace esb //API part
 	inline void ConnectExternalDataSource(ConstPara<String> ExternalDataSourceName_) { ESB_INVOKE_API_PROC1(mngbase, 18, ExternalDataSourceName_); }
 	// Процедура РазорватьСоединениеСВнешнимИсточникомДанных(ИмяВнешнегоИсточникаДанных_ Как Строка)
 	inline void DisconnectExternalDataSource(ConstPara<String> ExternalDataSourceName_) { ESB_INVOKE_API_PROC1(mngbase, 19, ExternalDataSourceName_); }
+
+	// эти функции зависят от типов esb_data. здесь только объявления, а определения там
+	// 
+	// Функция ПолучитьДанныеВыбора(ТипЗначения_ Как Тип, Параметры_ Как Структура) Возвращает СписокЗначений
+	inline ValueList GetChoiceData(ConstPara<TypeValue> ValueType_, ConstPara<Structure> Parameters_);
+#endif	//ESB_API_INCLUDE_mngbase
+
+
+#if ESB_API_INCLUDE_mngcore
 	// Функция ЭтоАдресВременногоХранилища(Адрес_ Как Строка) Возвращает Булево
 	inline Boolean IsTempStorageURL(ConstPara<String> Address_) { ESB_INVOKE_API_FUNC1(Boolean, mngcore, 1, Address_); }
 	// Функция ПолучитьНавигационнуюСсылкуИнформационнойБазы() Возвращает Строка
@@ -1268,14 +1420,26 @@ namespace esb //API part
 	inline String GetAllFilesMask() { ESB_INVOKE_API_FUNC0(String, mngcore, 4); }
 	// Функция ПолучитьРазделительПути() Возвращает Строка
 	inline String GetPathSeparator() { ESB_INVOKE_API_FUNC0(String, mngcore, 5); }
+#endif	//ESB_API_INCLUDE_mngcore
+
+
+#if ESB_API_INCLUDE_odata
 	// Процедура УстановитьСоставСтандартногоИнтерфейсаOData(ОбъектыМетаданных_ Как Массив)
 	inline void SetStandardODataInterfaceContent(ConstPara<Array> MetadataObjects_) { ESB_INVOKE_API_PROC1(odata, 0, MetadataObjects_); }
 	// Функция ПолучитьСоставСтандартногоИнтерфейсаOData() Возвращает Массив
 	inline Array GetStandardODataInterfaceContent() { ESB_INVOKE_API_FUNC0(Array, odata, 1); }
+#endif	//ESB_API_INCLUDE_odata
+
+
+#if ESB_API_INCLUDE_xml2
 	// Функция ИзXMLТипа(ИмяТипа_ Как Строка, URIПространстваИмен_ Как Строка) Возвращает [Тип,Неопределено]
 	inline UndefOr<TypeValue> FromXMLType(ConstPara<String> TypeName_, ConstPara<String> NamespaceURI_) { ESB_INVOKE_API_FUNC2(UndefOr<TypeValue>, xml2, 4, TypeName_, NamespaceURI_); }
 	// Функция НайтиНедопустимыеСимволыXML(СтрокаСимволов_ Как Строка, ПозицияНачала_ Как Число, Версия_ Как Строка) Возвращает Число
 	inline Numeric FindDisallowedXMLCharacters(ConstPara<String> CharacterString_, ConstPara<Numeric> StartPosition_ = DefUndef<Numeric>, ConstPara<String> Version_ = DefUndef<String>) { ESB_INVOKE_API_FUNC3(Numeric, xml2, 9, CharacterString_, StartPosition_, Version_); }
+#endif	//ESB_API_INCLUDE_xml2
+
+
+#if ESB_API_INCLUDE_ext
 	// Функция ЧислоПрописью(Число_ Как Число, ФорматнаяСтрока_ Как Строка, ПараметрыПредметаИсчисления_ Как Строка) Возвращает Строка
 	inline String NumberInWords(ConstPara<Numeric> Number_, ConstPara<String> FormatString_ = DefUndef<String>, ConstPara<String> NumerationItemOptions_ = DefUndef<String>) { ESB_INVOKE_API_FUNC3(String, ext, 0, Number_, FormatString_, NumerationItemOptions_); }
 	// Функция ПредставлениеПериода(ДатаНачалаПериода_ Как Дата, ДатаОкончанияПериода_ Как Дата, ФорматнаяСтрока_ Как Строка) Возвращает Строка
@@ -1312,41 +1476,19 @@ namespace esb //API part
 	inline void BeginCreatingDirectory(ConstPara<NotifyDescription> NotifyDescription_, ConstPara<String> DirectoryName_) { ESB_INVOKE_API_PROC2(ext, 16, NotifyDescription_, DirectoryName_); }
 	// Процедура НачатьЗапускПриложения(ОписаниеОповещения_ Как ОписаниеОповещения, СтрокаКоманды_ Как Строка, ТекущийКаталог_ Как Строка, ДождатьсяЗавершения_ Как Булево)
 	inline void BeginRunningApplication(ConstPara<NotifyDescription> NotifyDescription_, ConstPara<String> CommandLine_, ConstPara<String> CurrentDirectory_ = DefUndef<String>, ConstPara<Boolean> WaitForCompletion_ = DefUndef<Boolean>) { ESB_INVOKE_API_PROC4(ext, 17, NotifyDescription_, CommandLine_, CurrentDirectory_, WaitForCompletion_); }
+#endif	//ESB_API_INCLUDE_ext
 
 
-	// Функция ПолучитьИмяВременногоФайла(Расширение_ Как Строка) Возвращает Строка
-	// (конфликтует с WinApi GetTempFileName поэтому имя изменено)
-	inline String GetTempFileNameFrom1C(ConstPara<String> Extension_) { ESB_INVOKE_API_FUNC1(String, backend, 87, Extension_); }
-
-	// Функция СмещениеСтандартногоВремени(ЧасовойПояс_ Как [Строка,Неопределено], УниверсальноеВремя_ Как [Дата,Неопределено]) Возвращает Дата
-	inline DateTime StandardTimeOffset(ConstPara<String> TimeZone_ = DefUndef<String>, ConstPara<DateTime> UniversalTime_ = DefUndef<DateTime>) { ESB_INVOKE_API_FUNC2(DateTime, backend, 85, TimeZone_, UniversalTime_); }
-
-	// Свойство [[Чтение,Запись]] РабочаяДата Как Дата
-	// *Доступно для записи в случае, если свойство ИспользованиеРабочейДаты имеет значение Назначать
-	inline DateTime GetWorkingDate() { ESB_INVOKE_API_PROP_GET(DateTime, frntend, 1); }	
-	// Свойство [[Только Чтение]] ПараметрЗапуска Как Строка
-	inline String GetLaunchParameter() { ESB_INVOKE_API_PROP_GET(String, frntend, 4); }
 
 
-// эти функции зависят от типов esb_data. здесь только объявления, а определения там
-// 
-	// Функция НайтиПоСсылкам(СписокСсылок_ Как Массив, ОбластьПоиска_ Как Массив, ВключитьОбъекты_ Как Массив, ИсключитьОбъекты_ Как Массив) Возвращает ТаблицаЗначений
-	inline ValueTable FindByRef(ConstPara<Array> ReferenceList_, ConstPara<Array> SearchArea_ = DefUndef<Array>, ConstPara<Array> IncludeObjects_ = DefUndef<Array>, ConstPara<Array> ExcludeObjects_ = DefUndef<Array>);
-	// Функция ПолучитьСтруктуруХраненияБазыДанных(ОбъектыМетаданных_ Как Массив, ИменаБазыДанных_ Как Булево) Возвращает ТаблицаЗначений
-	inline ValueTable GetDBStorageStructureInfo(ConstPara<Array> MetadataObjects_, ConstPara<Boolean> DBMSNames_ = DefUndef<Boolean>);
-	// Функция ПользователиWindows() Возвращает [ТаблицаЗначений,Массив]
-	inline ClassMix<ValueTable, Array> WindowsUsers();
-	// Функция ПользователиОС() Возвращает [ТаблицаЗначений,Массив]
-	inline ClassMix<ValueTable, Array> OSUsers();
-	// Функция ПолучитьДанныеВыбора(ТипЗначения_ Как Тип, Параметры_ Как Структура) Возвращает СписокЗначений
-	inline ValueList GetChoiceData(ConstPara<TypeValue> ValueType_, ConstPara<Structure> Parameters_);
+
+
+
+
+
+
 //
 
-// эти функции зависят от типов esb_file. здесь только объявления, а определения там
-//
-	// Функция Base64Значение(Строка_ Как Строка) Возвращает ДвоичныеДанные
-	inline BinaryData Base64Value(ConstPara<String> Line_);
-//...
 // end from providers -----------------------------------------------------
 
 
@@ -1673,7 +1815,7 @@ inline String Left(const String& Line_, const Numeric& CountOfCharacters_) {
 	int n_char = static_cast<int>(CountOfCharacters_);
 	size_t len = Line_.length();
 	if (len == 0 || n_char <= 0) return String::Empty_;
-	return String{ std::wstring_view{Line_.c_str(), std::min((unsigned)n_char, len) } };
+	return String{ strview_t{Line_.c_str(), std::min(static_cast<size_t>(n_char), len) } };
 }
 inline String Right(const String& Line_, const Numeric& CountOfCharacters_) {
 	int in_char = static_cast<int>(CountOfCharacters_);
@@ -1682,45 +1824,45 @@ inline String Right(const String& Line_, const Numeric& CountOfCharacters_) {
 	size_t un_char = static_cast<unsigned>(in_char);
 	if (un_char >= len) return Line_;
 	size_t off = len - un_char;
-	return String{ std::wstring_view{Line_.c_str() + off, un_char} };
+	return String{ strview_t{Line_.c_str() + off, un_char} };
 }
-inline void trim_l(const wchar_t*& ptr_, size_t& len_) {
+inline void trim_l(const strchar_t*& ptr_, size_t& len_) {
 	while (len_ > 0 && is_space(*ptr_)) {
 		++ptr_;
 		--len_;
 	}
 }
-inline void trim_r(const wchar_t*& ptr_, size_t& len_) {
+inline void trim_r(const strchar_t*& ptr_, size_t& len_) {
 	while (len_ > 0 && is_space(*ptr_)) {
 		--ptr_;
 		--len_;
 	}
 }
 inline String TrimL(const String& Line_) {
-	const wchar_t* p_head = Line_.c_str();
+	const strchar_t* p_head = Line_.c_str();
 	size_t len = Line_.length();
 	if (len == 0) return String::Empty_;
 	trim_l(p_head, len);
-	return (len == 0) ? String::Empty_ : String{ std::wstring_view{p_head, len} };
+	return (len == 0) ? String::Empty_ : String{ strview_t{p_head, len} };
 }
 inline String TrimR(const String& Line_) {
-	const wchar_t* p_head = Line_.c_str();
+	const strchar_t* p_head = Line_.c_str();
 	size_t len = Line_.length();
 	if (len == 0) return String::Empty_;
 	assert(p_head);
-	const wchar_t* p_last = p_head + len - 1;
+	const strchar_t* p_last = p_head + len - 1;
 	trim_r(p_last, len);
-	return (len == 0) ? String::Empty_ : String{ std::wstring_view{p_head, len} };
+	return (len == 0) ? String::Empty_ : String{ strview_t{p_head, len} };
 }
 inline String TrimAll(const String& Line_) {
-	const wchar_t* p_head = Line_.c_str();
+	const strchar_t* p_head = Line_.c_str();
 	size_t len = Line_.length();
 	if (len == 0) return String::Empty_;
 	assert(p_head);
-	const wchar_t* p_last = p_head + len - 1;
+	const strchar_t* p_last = p_head + len - 1;
 	trim_l(p_head, len);
 	trim_r(p_last, len);
-	return (len == 0) ? String::Empty_ : String{ std::wstring_view{p_head, len} };
+	return (len == 0) ? String::Empty_ : String{ strview_t{p_head, len} };
 }
 
 inline String Mid(const String& Line_, const Numeric& InitialNumber_, int CountOfCharacters_ /*= Undef::Value_*/) {
@@ -1734,9 +1876,9 @@ inline String Mid(const String& Line_, const Numeric& InitialNumber_, int CountO
 	else {
 		size_t count_rest = len - pos;						// 0<=(pos_1c-1)<len
 		size_t count_for_mid = (CountOfCharacters_ < 0 || (unsigned)CountOfCharacters_ > count_rest)? count_rest /*assume all rest*/ : (unsigned)CountOfCharacters_;
-		const wchar_t* p_1st = Line_.c_str();
+		const strchar_t* p_1st = Line_.c_str();
 		assert( p_1st && (p_1st + pos + count_for_mid) <= (p_1st + len) );		//!! new_end <= org_end
-		return String{ std::wstring_view{p_1st + pos, count_for_mid} };
+		return String{ strview_t{p_1st + pos, count_for_mid} };
 	}
 }
 inline String Mid(const String& Line_, const Numeric& InitialNumber_, const Numeric& CountOfCharacters_) {
@@ -1753,8 +1895,8 @@ String Upper(const String& Line_);	//esbhlp
 String Lower(const String& Line_);	//esbhlp
 inline String Char(const Numeric& CharacterCode_) {
 	int ich = static_cast<int>(CharacterCode_);
-	wchar_t wch = static_cast<wchar_t>(ich);
-	return String{ std::wstring_view{&wch,1} };
+	strchar_t wch = static_cast<strchar_t>(ich);
+	return String{ strview_t{&wch,1} };
 }
 
 inline Numeric CharCode(const String& Line_, int CharacterNumber1Based_ /* =Undef::Value_ */) {
@@ -1763,9 +1905,9 @@ inline Numeric CharCode(const String& Line_, int CharacterNumber1Based_ /* =Unde
 	if (CharacterNumber1Based_ < 1 || (unsigned)CharacterNumber1Based_ > len)
 		return Numeric::Value__1_;
 	else {
-		const wchar_t* pstr = Line_.c_str();
+		const strchar_t* pstr = Line_.c_str();
 		assert(pstr);
-		wchar_t wch = pstr[CharacterNumber1Based_ - 1];
+		strchar_t wch = pstr[CharacterNumber1Based_ - 1];
 		return Numeric{ static_cast<int>(wch) };
 	}
 }
@@ -1774,14 +1916,14 @@ inline Numeric CharCode(const String& Line_)									{	return CharCode(Line_, 1)
 inline Numeric CharCode(const String& Line_, const Undef&)						{	return CharCode(Line_); }
 
 inline Numeric StrOccurrenceCount(const String& Line_, const String& SearchSubstring_) {
-	const std::wstring_view source = Line_.view();
-	const std::wstring_view pattern = SearchSubstring_.view();
+	const strview_t source = Line_.view();
+	const strview_t pattern = SearchSubstring_.view();
 	if (source.empty() || pattern.empty())
 		return Numeric::Value_0_;
 	else {
 		size_t cnt = 0;
 		size_t pos = source.find(pattern);
-		while (pos != std::wstring_view::npos) {
+		while (pos != strview_t::npos) {
 			++cnt;
 			pos = source.find(pattern, pos + pattern.length());
 		}
@@ -1794,9 +1936,9 @@ inline Numeric StrOccurrenceCount(const String& Line_, const String& SearchSubst
 inline const Boolean& IsBlankString(const String& Line_) {
 	size_t len = Line_.length();
 	if (len == 0) return Boolean::True_;
-	const wchar_t* ptr = Line_.c_str();
+	const strchar_t* ptr = Line_.c_str();
 	assert(ptr);
-	const wchar_t* ptr_end = ptr + len;
+	const strchar_t* ptr_end = ptr + len;
 	while (ptr < ptr_end) {
 		if (!is_space(*ptr)) return Boolean::False_;
 		++ptr;
@@ -1812,13 +1954,13 @@ inline Numeric StrLineCount(const String& Line_) {
 	// Позволяет посчитать число строк в многострочной строке. Строки в многострочной строке разделены символами перевода строк (Символы.ПС). (LF, 0x0A (10 decimal), \n)
 	// Гхм.. судя по коду разделителями продстрок также являются CR и при этом он экранирует LF. т.е. голый CR тоже разделитель
 	// причем что new-line в конце строки, то он не начинает новую строку (т.е. в строке из одного \n только одна строка, а не две пустых) 
-	const wchar_t* pstr = Line_.c_str();
+	const strchar_t* pstr = Line_.c_str();
 	size_t n_lines = 1;		// в любой строке есть как минимум одна строка
 	if (pstr) {
-		const wchar_t* pstr_end = pstr + Line_.length();
+		const strchar_t* pstr_end = pstr + Line_.length();
 		if (pstr != pstr_end) {
 			while (true) {
-				wchar_t ch = *pstr++;
+				strchar_t ch = *pstr++;
 				if (pstr == pstr_end)
 					break;	// последний char не анализируется в любом случае - если он обычный это не важно, если разделитель - игнорируется
 				else if (ch == L'\n')
@@ -1838,9 +1980,9 @@ inline Numeric StrLineCount(const String& Line_) {
 }
 
 inline String StrGetLine(const String& Line_, const Numeric& LineNumber_) {
-	auto _find_line_next = [](const wchar_t*& pstr_, const wchar_t* pstr_end_) -> bool {
+	auto _find_line_next = [](const strchar_t*& pstr_, const strchar_t* pstr_end_) -> bool {
 		while (pstr_ != pstr_end_) {
-			wchar_t ch = *pstr_++;
+			strchar_t ch = *pstr_++;
 			if (ch == L'\n') {
 				return true;
 			}
@@ -1851,7 +1993,7 @@ inline String StrGetLine(const String& Line_, const Numeric& LineNumber_) {
 		}
 		return false;
 	};
-	auto _find_line = [&_find_line_next](const wchar_t*& pstr_, const wchar_t* pstr_end_, int n_line_need_) -> bool {
+	auto _find_line = [&_find_line_next](const strchar_t*& pstr_, const strchar_t* pstr_end_, int n_line_need_) -> bool {
 		int n_line = 1;
 		while (n_line != n_line_need_) {
 			if (_find_line_next(pstr_, pstr_end_)) 
@@ -1861,7 +2003,7 @@ inline String StrGetLine(const String& Line_, const Numeric& LineNumber_) {
 		}
 		return true;
 	};
-	auto _find_line_end = [](const wchar_t* pstr_, const wchar_t* pstr_end_) -> const wchar_t* {
+	auto _find_line_end = [](const strchar_t* pstr_, const strchar_t* pstr_end_) -> const strchar_t* {
 		for ( ; pstr_ != pstr_end_; ++pstr_) {
 			if (*pstr_ == L'\n' || *pstr_ == L'\r')
 				break;
@@ -1869,11 +2011,11 @@ inline String StrGetLine(const String& Line_, const Numeric& LineNumber_) {
 		return pstr_;
 	};
 	//---------------------
-	const wchar_t* pstr = Line_.c_str();
+	const strchar_t* pstr = Line_.c_str();
 	if (pstr) {
-		const wchar_t* pstr_end = pstr + Line_.length();
+		const strchar_t* pstr_end = pstr + Line_.length();
 		if (_find_line(pstr, pstr_end, static_cast<int>(LineNumber_)))
-			return String(std::wstring_view{ pstr, _find_line_end(pstr, pstr_end) });
+			return String(  strview_t{ pstr, _find_line_end(pstr, pstr_end) }  );
 	}
 	
 	return String::Empty_;

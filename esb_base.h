@@ -214,11 +214,18 @@ namespace esb {
 		ESL_THROW_NUMERIC_NOT_INT_OR_INTMAX_OVERFLOW();
 	}
 
+	constexpr auto xxm =  std::numeric_limits<long long>::min();
+
 	template<class IntegerT>
 	inline IntegerT ToIntegerOrThrow(const Numeric& value_) {
 		Numeric::to_integer_t i = ToIntegerOrThrow<Numeric::to_integer_t>(value_);
-		if (i >= std::numeric_limits<IntegerT>::min() && i <= std::numeric_limits<IntegerT>::max())
-			return static_cast<IntegerT>(i);
+		if constexpr (std::is_same_v<Numeric::to_integer_t, IntegerT>) {
+			return i;
+		}
+		else {
+			if (std::cmp_greater_equal(i, std::numeric_limits<IntegerT>::min()) && std::cmp_less_equal(i, std::numeric_limits<IntegerT>::max()))
+				return static_cast<IntegerT>(i);
+		}
 		throw_error_integer_overflow<IntegerT>();
 	}
 
@@ -536,7 +543,6 @@ namespace internal{
 #define ESB_ARGPACK9(_1,_2,_3,_4,_5,_6,_7,_8,_9)	{&_1,&_2,&_3,&_4,&_5,&_6,&_7,&_8,&_9}
 
 
-//#define ESB_INVOKE_CTOR_(CLASS_)							return esb::InvokeCreate<CLASS_>
 #define ESB_INVOKE_CTOR_(CLASS_)							return TypeObj_.CreateValue<CLASS_>
 #define ESB_INVOKE_CTOR0(CLASS_)									ESB_INVOKE_CTOR_(CLASS_) ()
 #define ESB_INVOKE_CTOR1(CLASS_, _1)								ESB_INVOKE_CTOR_(CLASS_) ({&_1});							
@@ -552,8 +558,8 @@ namespace internal{
 #define ESB_INVOKE_CTOR_PACK1(CLASS_, _1T, _1V, _ARGS_T, _ARGS_V)	ESB_INVOKE_CTOR_(CLASS_) ( {&_1V, &_ARGS_V ...});
 
 
-#define ESB_INVOKE_MEMB_FUNC0(RET_, METH_)					return check_and_make<RET_>(IObjectMethods_InvokeAsFunc( *get_context(*this), (METH_)) )
-#define ESB_INVOKE_MEMB_FUNC_(RET_, METH_, ARGS_)			return check_and_make<RET_>(IObjectMethods_InvokeAsFunc(* get_context(*this), (METH_) , ARGS_ ) )
+#define ESB_INVOKE_MEMB_FUNC0(RET_, METH_)					return check_and_make<RET_>(IObjectMethods_InvokeAsFunc( *get_context(*this), static_cast<dispix_t>((METH_)) ) )
+#define ESB_INVOKE_MEMB_FUNC_(RET_, METH_, ARGS_)			return check_and_make<RET_>(IObjectMethods_InvokeAsFunc(* get_context(*this), static_cast<dispix_t>((METH_)) , ARGS_ ) )
 #define ESB_INVOKE_MEMB_FUNC1(RET_, METH_, _1)				ESB_INVOKE_MEMB_FUNC_(RET_, METH_, ESB_ARGPACK1(_1) )
 #define ESB_INVOKE_MEMB_FUNC2(RET_, METH_, _1,_2)			ESB_INVOKE_MEMB_FUNC_(RET_, METH_, ESB_ARGPACK2(_1,_2) )
 #define ESB_INVOKE_MEMB_FUNC3(RET_, METH_, _1,_2,_3)		ESB_INVOKE_MEMB_FUNC_(RET_, METH_, ESB_ARGPACK3(_1,_2,_3) )
@@ -561,8 +567,8 @@ namespace internal{
 #define ESB_INVOKE_MEMB_FUNC5(RET_, METH_, _1,_2,_3,_4,_5)	ESB_INVOKE_MEMB_FUNC_(RET_, METH_, ESB_ARGPACK5(_1,_2,_3,_4,_5) )
 
 
-#define ESB_INVOKE_MEMB_PROC0(METH_)						return IObjectMethods_InvokeAsProc( *get_context(*this), (METH_)  );
-#define ESB_INVOKE_MEMB_PROC_(METH_, ARGS_)					return IObjectMethods_InvokeAsProc( *get_context(*this), (METH_), ARGS_ );
+#define ESB_INVOKE_MEMB_PROC0(METH_)						return IObjectMethods_InvokeAsProc( *get_context(*this), static_cast<dispix_t>((METH_))  );
+#define ESB_INVOKE_MEMB_PROC_(METH_, ARGS_)					return IObjectMethods_InvokeAsProc( *get_context(*this), static_cast<dispix_t>((METH_)), ARGS_ );
 #define ESB_INVOKE_MEMB_PROC1(METH_, _1)					ESB_INVOKE_MEMB_PROC_(METH_, ESB_ARGPACK1(_1) )
 #define ESB_INVOKE_MEMB_PROC2(METH_, _1,_2)					ESB_INVOKE_MEMB_PROC_(METH_, ESB_ARGPACK2(_1,_2) )
 #define ESB_INVOKE_MEMB_PROC3(METH_, _1,_2,_3)				ESB_INVOKE_MEMB_PROC_(METH_, ESB_ARGPACK3(_1,_2,_3) )
@@ -650,8 +656,8 @@ namespace esb
 	public:
 		IxCollectionImplRO(IxInterfacePtrT&& interface_) : m_interface(std::move(interface_))
 		{}
-		size_t	Size() const												{ return IxCollection_Size(*m_interface); }
-		value_t GetAt(size_t index_) const									{ return make<EsbValueT>(IxCollection_GetAt(*m_interface, index_)); }
+		size_t	Size() const											{ return IxCollection_Size(*m_interface); }
+		value_t		GetAt(size_t index_) const							{ return make<EsbValueT>(IxCollection_GetAt(*m_interface, index_)); }
 	public:
 		template_argument_type_t<IxInterfacePtrT>& get_interface() const	{ return *this->m_interface; }
 	};
@@ -662,7 +668,7 @@ namespace esb
 	public:
 		IxCollectionImplRW(IxInterfacePtrT&& interface_) : IxCollectionImplRO<EsbValueT, IxInterfacePtrT>(std::move(interface_))
 		{}
-		void SetAt(size_t index_, ConstPara<EsbValueT> value_)							{ return IxCollection_SetAt(*this->m_interface, index_, value_);}
+		void SetAt(size_t index_, ConstPara<EsbValueT> value_)			{ return IxCollection_SetAt(*this->m_interface, index_, value_);}
 	};
 
 
@@ -676,7 +682,7 @@ namespace esb
 		using ix_item_t = IxCollectionItemRO<EsbValueT, interface_t>;
 		IxCollectionRO(interface_t&& interface_) : IxCollectionImplRO<EsbValueT, interface_t>(std::move(interface_))
 		{}
-		const ix_item_t operator[](size_t index_) const			{ return ix_item_t{ this->m_interface, index_ }; }
+		const ix_item_t operator[](size_t index_) const					{ return ix_item_t{ this->m_interface, index_ }; }
 		ESB_PROPERTY_ARRAY_RO(EsbValueT, At);
 	};
 
@@ -688,7 +694,7 @@ namespace esb
 		IxCollectionRWImpl(IxInterfacePtrT&& interface_) : IxCollectionImplRW<EsbValueT, IxInterfacePtrT>(std::move(interface_))
 		{}
 		ix_item_t operator[](size_t index_)				{ return ix_item_t{ this->m_interface, index_ }; }
-		const ix_item_t operator[](size_t index_) const { return ix_item_t{ this->m_interface, index_ }; }
+		const ix_item_t operator[](size_t index_) const	{ return ix_item_t{ this->m_interface, index_ }; }
 		ESB_PROPERTY_ARRAY_RW(EsbValueT, At);
 	};
 
@@ -711,9 +717,9 @@ namespace esb
 		using typename base_t::interface_t;
 		IxCollection(interface_t&& interface_) : IxCollectionRWImpl<EsbValueT, IIxCollectionPtr>{ std::move(interface_) }
 		{}
-		void Resize(size_t new_size_)								{	return IxCollection_Resize(*this->m_interface, new_size_);	}
-		void Insert(size_t at_index_, ConstPara<EsbValueT> value_)	{	return IxCollection_Insert(*this->m_interface, at_index_, value_);	}
-		void Remove(size_t at_index_)								{	return IxCollection_Remove(*this->m_interface, at_index_);	}
+		void Resize(size_t new_size_)									{ return IxCollection_Resize(*this->m_interface, new_size_);	}
+		void Insert(size_t at_index_, ConstPara<EsbValueT> value_)		{ return IxCollection_Insert(*this->m_interface, at_index_, value_);	}
+		void Remove(size_t at_index_)									{ return IxCollection_Remove(*this->m_interface, at_index_);	}
 	};
 
 	using IxCollectionAny = IxCollection<Arbitrary>;
@@ -855,7 +861,7 @@ namespace esb
 		// мы всегда принимаем интерфейс в raw-виде, но в дебаге создаем для него новый интерфейс-птр
 		// принимать в raw-виде нужно потому, что наш интерфейс не должен быть конст для удовлетворения концептам,
 		// а коллекции, когда они конст, не-константный интерфейс-птр отдать не могут. а не-константный raw-интерфейс из конст-птр отдать могут.
-		IxCollectionIteratorConst(interface_raw_t& collection_, size_t position_) noexcept : m_col(interface_ptr_t{ collection_ }), m_pos(position_) 
+		IxCollectionIteratorConst(interface_raw_t& collection_, size_t position_) noexcept : m_col(interface_ptr_t{ collection_ }), m_pos(position_)
 #else
 		IxCollectionIteratorConst(interface_raw_t& collection_, size_t position_) noexcept : m_col(&collection_), m_pos(position_)
 #endif
@@ -1361,7 +1367,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 			m_id = IObjectProperties_Find(*m_ctx, name_);
 		}
 #if ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK
-		DynamicCollectionPropertyBase(const IObjectPtr& ctx_, const std::wstring_view& name_) : m_ctx{ ctx_ }
+		DynamicCollectionPropertyBase(const IObjectPtr& ctx_, const strview_t& name_) : m_ctx{ ctx_ }
 		{
 			m_id = IObjectProperties_Find(*m_ctx, name_);
 		}
@@ -1373,7 +1379,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 	public:
 		explicit operator bool() const	{ return isOk(); }
 	public:
-		ESB_PROPERTY_FIELD_RO(size_t, Id);
+		ESB_PROPERTY_FIELD_RO(dispix_t, Id);
 	};
 
 
@@ -1383,7 +1389,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 		using value_t = ValueT;
 		DynamicCollectionPropertyRO(const IObjectPtr& ctx_, const String& name_) : DynamicCollectionPropertyBase{ ctx_, name_ }
 		{}
-		DynamicCollectionPropertyRO(const IObjectPtr& ctx_, const std::wstring_view& name_) : DynamicCollectionPropertyBase{ ctx_, name_ }
+		DynamicCollectionPropertyRO(const IObjectPtr& ctx_, const strview_t& name_) : DynamicCollectionPropertyBase{ ctx_, name_ }
 		{}
 	public:
 		value_t GetValue() const	{ return check_and_make<value_t>(IObjectProperties_GetValue(*this->get_context(), this->GetId())); }
@@ -1399,7 +1405,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 		using value_t = ValueT;
 		DynamicCollectionPropertyWO(const IObjectPtr& ctx_, const String& name_) : DynamicCollectionPropertyBase{ ctx_, name_ }
 		{}
-		DynamicCollectionPropertyWO(const IObjectPtr& ctx_, const std::wstring_view& name_) : DynamicCollectionPropertyBase{ ctx_, name_ }
+		DynamicCollectionPropertyWO(const IObjectPtr& ctx_, const strview_t& name_) : DynamicCollectionPropertyBase{ ctx_, name_ }
 		{}
 	public:
 		void SetValue(ConstPara<value_t> Value_)								{ return IObjectProperties_SetValue(*this->get_context(), this->GetId(), Value_); }
@@ -1414,7 +1420,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 	public:
 		DynamicCollectionPropertyRW(const IObjectPtr& ctx_, const String& name_) : DynamicCollectionPropertyRO<ValueT>{ ctx_, name_ }
 		{}
-		DynamicCollectionPropertyRW(const IObjectPtr& ctx_, const std::wstring_view& name_) : DynamicCollectionPropertyRO<ValueT>{ ctx_, name_ }
+		DynamicCollectionPropertyRW(const IObjectPtr& ctx_, const strview_t& name_) : DynamicCollectionPropertyRO<ValueT>{ ctx_, name_ }
 		{}
 	public:
 		using DynamicCollectionPropertyRO<ValueT>::value_t;
@@ -1437,7 +1443,7 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 		int GetFieldId(const String& name_) const									{ return IObjectProperties_Find(me_context(), name_); }
 		CollectionPropertyClassT operator[](const String& name_) const				{ return CollectionPropertyClassT{ get_context(me()), name_ }; }
 #if ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK
-		CollectionPropertyClassT operator[](const std::wstring_view& name_) const	{ return CollectionPropertyClassT{ get_context(me()), name_ }; }
+		CollectionPropertyClassT operator[](const strview_t& name_) const			{ return CollectionPropertyClassT{ get_context(me()), name_ }; }
 #endif
 	};
 
@@ -1506,13 +1512,13 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_IMPLICIT_ASSIGN_DELETED_WHEN_REF_MEM
 
 #define ESB_IMPLEMENT_DYNAMIC_COLLECTION_RO_NAME(NAME_)												\
 	ESB_IMPLEMENT_DYNAMIC_COLLECT_N(NAME_)															\
-	dx_collection_t::value_t Get##NAME_(size_t id_) { return dx_collection_t::GetField(id_); }		\
+	dx_collection_t::value_t Get##NAME_(dispix_t id_) { return dx_collection_t::GetField(id_); }	\
 	ESB_PROPERTY_ARRAY_RO(dx_collection_t::value_t, NAME_);
 
 #define ESB_IMPLEMENT_DYNAMIC_COLLECTION_RW_NAME(NAME_)												\
 	ESB_IMPLEMENT_DYNAMIC_COLLECT_N(NAME_)															\
-	dx_collection_t::value_t Get##NAME_(size_t id_)							{ return dx_collection_t::GetField(id_); }			\
-	auto Set##NAME_(size_t id_, ConstPara<dx_collection_t::value_t> value_)	{ return dx_collection_t::SetField(id_, value_); }	\
+	dx_collection_t::value_t Get##NAME_(dispix_t id_)							{ return dx_collection_t::GetField(id_); }			\
+	auto Set##NAME_(dispix_t id_, ConstPara<dx_collection_t::value_t> value_)	{ return dx_collection_t::SetField(id_, value_); }	\
 	ESB_PROPERTY_ARRAY_RW(dx_collection_t::value_t, NAME_);
 
 	//
