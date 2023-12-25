@@ -16,10 +16,11 @@
 
 #include "esb_app_config.h"
 
-#include "..\esb.h"
-#include "..\esb_ext.h"
-#include "..\esb_es_data.h"
-#include "..\esb_es_file.h"
+#include "esb/esb.h"
+#include "esb/esb_ext.h"
+#include "esb/1c/1c_file.h"
+#include "esb/1c/1c_data.h"
+#include "esb/1c/1c_api.h"
 
 #pragma comment( lib , "../lib/" ESB_ESBHLPLIB_PATH_NAME )
 
@@ -457,7 +458,7 @@ PseudoArrayOfInt SortPseudoArrayOfInt(PseudoArrayOfInt array_) {
 
 
 // Имплементация "универсальной" функции сортировки. сортирует все и опциями режима.
-using ArraySortMode = ClassMix<Undef, SortDirectionValue, DelegatToMeth>;
+using ArraySortMode = ClassMix<Undef, SortDirection, DelegatToMeth>;
 
 auto comparator_less() {
 	auto comparator = [](const Numeric& a, const Numeric& b) -> bool {
@@ -484,12 +485,12 @@ void DoSortIt(const IteratorT it_begin_, const IteratorT it_end_, const ArraySor
 	if (mode_.is<Undef>())
 		return std::sort(it_begin_, it_end_, comparator_less());
 
-	if (mode_.is<SortDirectionValue>()) {
-		SortDirectionValue sort_mode = mode_.make<SortDirectionValue>();
-		if (sort_mode == SortDirectionEnum::Asc)
+	if (mode_.is<SortDirection>()) {
+		SortDirection sort_mode = mode_.make<SortDirection>();
+		if (sort_mode == SortDirection::Asc)
 			return std::sort(it_begin_, it_end_, comparator_less());
 
-		assert(sort_mode == SortDirectionEnum::Desc);
+		assert(sort_mode == SortDirection::Desc);
 		return std::sort(it_begin_, it_end_, comparator_gret());
 	}
 
@@ -621,7 +622,8 @@ public:
 	Numeric GetVAL() const		{ return m_stru.GetField(1).make<Numeric>(); }
 };
 
-void ResultArrayShow(const Array& arr_) {
+void ResultArrayShow(const Array& arr_) 
+{
 	// Нам должны были передать массив структур TAG,VAL с текстом (описанием) результата в поле TAG и числовым значение в поле VAL.
 	constexpr size_t line_len_ = strview_t(ESB_T("сообщить(* --------------------------------------------------------------------------------------------------------------);")).size();
 	// "без лишего шума и пыли" (выделения памяти) - рекурсивно
@@ -710,10 +712,9 @@ ValueTable CreateResultTable(const Array& results_array_)
 
 
 // в порядке тестирования классов и АПИ.
-void SaveResultsToFile(const Array& results_array_) {			
+void SaveResultsToFile(const Array& results_array_) 
+{			
 	static_assert(sizeof(strview_t::value_type) == 2 && sizeof(unsigned) == 4, "write_to_bb alg requirement!");
-
-	//assert(false);
 
 	size_t c_wchars = 2; //FF FE
 	for (auto x : results_array_) {	
@@ -754,27 +755,30 @@ void SaveResultsToFile(const Array& results_array_) {
 	// ЕСБ позволяет писать код "ну почти как в 1С", но для с++ это чудовищно неэффективный код. просто мясорубка и мешанина вызовов платформы.
 	String		s_db = Upper(InfoBaseConnectionString());
 	Numeric		pos_1 = StrFind(s_db, String(ESB_T("FILE=")));				//len=6
-	Numeric		pos_e = StrFind(s_db, String(ESB_T("\\")), SearchDirectionEnum::FromEnd);
+	Numeric		pos_e = StrFind(s_db, String(ESB_T("\\")), SearchDirection::FromEnd);
 	string_t	s_dir = Mid(s_db, pos_1 + Numeric(6), pos_e - pos_1 - Numeric(6)).string();
 	String		s_file = String(s_dir + ESB_T("\\test_info.txt"));
 
-	FileStream fs = FileStream::Create(s_file, FileOpenModeEnum::OpenOrCreate);
+	FileStream fs = FileStream::Create(s_file, FileOpenMode::OpenOrCreate);
 	fs.SetSize(Numeric::Value_0_);
 	fs.Write(bb, Numeric::Value_0_, Numeric(i_byte));
 	fs.Flush();
 	fs.Close();
-
-	Message(String(ESB_T("Таблица результатов сохранена как:")));
+	
+	Message(String(ESB_T("Таблица результатов сохранена как: ")));
 	Message(s_file);
 }
 
 
 // просто тестирование объекта Query и QueryResult
-Array SelectTestArrayOfNumeric() {
+Array SelectTestArrayOfNumeric() 
+{
 	Query qry = Query::Create();
 	qry.Text = String(ESB_T("ВЫБРАТЬ ТестовыйНабор.Значение КАК Значение ИЗ РегистрСведений.ТестовыйНабор КАК ТестовыйНабор"));
 	auto qry_res = qry.Execute().make<QueryResult>();
+
 	auto rec = qry_res.Select();
+
 	Numeric crec = rec.Count();
 	Array res = Array::Create(crec);
 	size_t ix = 0;
@@ -865,7 +869,7 @@ const AddinDescriptor AddinDescriptor::Instance_{ std::type_identity<dispinterfa
 
 //1C Компонента
 //---------------------------------------------------------------------------
-#include "..\esbldr.h"
+#include "esb/esbldr.h"
 const strview_t			EsbComponent::ComponentName_	= ESB_T("EsbDemoComponent");
 const WCHAR_T			EsbComponent::AddinName_[]		= ESB_T("1");		// L"esb";
 IAddInDefBase*			EsbComponent::AppConnect_		= nullptr;

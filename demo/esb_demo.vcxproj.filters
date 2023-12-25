@@ -13,6 +13,15 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Файлы заголовков\1C-v8309">
+      <UniqueIdentifier>{35bbdc9b-fa28-4df5-9dfc-e7a14af09561}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Файлы заголовков\1C-v8323">
+      <UniqueIdentifier>{af2f12ac-5b3d-4eb7-a328-210eada28f47}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Файлы заголовков\esb">
+      <UniqueIdentifier>{a43a181c-f39c-46d3-ba03-9241c83a57b4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -23,38 +32,53 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\esb.h">
+    <ClInclude Include="esb_app_config.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_app.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\1c\v8309\es1_api.h">
+      <Filter>Файлы заголовков\1C-v8309</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_base.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\1c\v8309\es1_data.h">
+      <Filter>Файлы заголовков\1C-v8309</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_errors.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\1c\v8309\es1_file.h">
+      <Filter>Файлы заголовков\1C-v8309</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_es_data.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\1c\v8309\es1_main.h">
+      <Filter>Файлы заголовков\1C-v8309</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_es_file.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\1c\v8323\es1_api.h">
+      <Filter>Файлы заголовков\1C-v8323</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_ext.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\1c\v8323\es1_data.h">
+      <Filter>Файлы заголовков\1C-v8323</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_meta.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\1c\v8323\es1_file.h">
+      <Filter>Файлы заголовков\1C-v8323</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_pp.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\1c\v8323\es1_main.h">
+      <Filter>Файлы заголовков\1C-v8323</Filter>
     </ClInclude>
-    <ClInclude Include="..\esb_util.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\esb.h">
+      <Filter>Файлы заголовков\esb</Filter>
     </ClInclude>
-    <ClInclude Include="..\esbldr.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\include\esb\esb_base.h">
+      <Filter>Файлы заголовков\esb</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\esb\esb_config.h">
+      <Filter>Файлы заголовков\esb</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\esb\esb_core.h">
+      <Filter>Файлы заголовков\esb</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\esb\esb_ext.h">
+      <Filter>Файлы заголовков\esb</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\esb\esb_meta.h">
+      <Filter>Файлы заголовков\esb</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\esb\esbldr.h">
+      <Filter>Файлы заголовков\esb</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

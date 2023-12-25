@@ -7,10 +7,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "esb_demo", "esb_demo.vcxpro
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		v8300Debug|x64 = v8300Debug|x64
-		v8300Debug|x86 = v8300Debug|x86
-		v8300Release|x64 = v8300Release|x64
-		v8300Release|x86 = v8300Release|x86
+		v8309Debug|x64 = v8309Debug|x64
+		v8309Debug|x86 = v8309Debug|x86
+		v8309Release|x64 = v8309Release|x64
+		v8309Release|x86 = v8309Release|x86
 		v8311Debug|x64 = v8311Debug|x64
 		v8311Debug|x86 = v8311Debug|x86
 		v8311Release|x64 = v8311Release|x64
@@ -25,14 +25,14 @@ Global
 		v8323Release|x86 = v8323Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8300Debug|x64.ActiveCfg = v8300Debug|x64
-		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8300Debug|x64.Build.0 = v8300Debug|x64
-		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8300Debug|x86.ActiveCfg = v8300Debug|Win32
-		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8300Debug|x86.Build.0 = v8300Debug|Win32
-		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8300Release|x64.ActiveCfg = v8300Release|x64
-		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8300Release|x64.Build.0 = v8300Release|x64
-		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8300Release|x86.ActiveCfg = v8300Release|Win32
-		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8300Release|x86.Build.0 = v8300Release|Win32
+		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8309Debug|x64.ActiveCfg = v8309Debug|x64
+		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8309Debug|x64.Build.0 = v8309Debug|x64
+		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8309Debug|x86.ActiveCfg = v8309Debug|Win32
+		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8309Debug|x86.Build.0 = v8309Debug|Win32
+		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8309Release|x64.ActiveCfg = v8309Release|x64
+		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8309Release|x64.Build.0 = v8309Release|x64
+		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8309Release|x86.ActiveCfg = v8309Release|Win32
+		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8309Release|x86.Build.0 = v8309Release|Win32
 		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8311Debug|x64.ActiveCfg = v8311Debug|x64
 		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8311Debug|x64.Build.0 = v8311Debug|x64
 		{F4504887-A8AB-48BA-AB37-1B7761E80AD3}.v8311Debug|x86.ActiveCfg = v8311Debug|Win32
