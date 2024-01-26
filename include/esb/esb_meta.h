@@ -19,6 +19,7 @@ using afx_ustring::to_nocase;
 using afx_ustring::cstr_compare;
 //
 #include <tuple>
+#include <vector>	//TODO	только для тестов
 
 // В данном файле собраны методы построения диспатч интерфейса наших объектов для 1С
 // NOTE		Много consteval/constexpr методов и практически все выписаны ручками без использования алгоритмов std
@@ -78,13 +79,21 @@ using afx_ustring::cstr_compare;
 // 
 //
 
+//namespace esb
+//{
+//}
 
-namespace esb // esb-meta
+
+namespace esb::_internal // esb-meta
 {
-
-// Для описания есб-интерфейса какого либо объекта нужно объявить специализацию этой структуры для этого объекта
+	// Для описания есб-интерфейса какого либо объекта нужно объявить специализацию этой структуры для этого объекта
+	// Мы не просто декларируем структуру, а делаем ее пустой по-умолчанию т.к. иногда нам нужно проверять наличие специализации
+	// а какое-либо обращение к incomplete-type практически всегда УБ
+	// Ниже проверяем валидность структуры наличием в ней поля TypeId_
 	template<typename>
-	struct interface_info_t;
+	struct interface_info_t {};
+
+
 	// в этой структуре должны быть (все или частично) следующие поля
 	// using object_t = <ваш-класс>
 	// Минамально достаточно только полей ESB_INTERFACE_PROP_META_FIELD и ESB_INTERFACE_METH_META_FIELD, или одного из них
@@ -102,37 +111,60 @@ namespace esb // esb-meta
 #define ESB_INTERFACE_CTOR_FIND_FIELD	InterfaceCtorFind
 #define ESB_INTERFACE_OBJECT_FIELD		object_t
 #define ESB_INTERFACE_DESCRIPTOR_FIELD	descriptor_t
+#define ESB_INTERFACE_TYPEID_FIELD		TypeId_
+
+
+
+	template<class MetaInterfaceT>
+	inline constexpr bool is_interface_has_type_id = requires { &MetaInterfaceT::ESB_INTERFACE_TYPEID_FIELD; };
+	template<typename MetaInterfaceT>
+	inline constexpr bool is_interface_defined = is_interface_has_type_id<MetaInterfaceT>;
+
+
+	template<typename MetaInterfaceT>
+	using interface_descriptor_t = MetaInterfaceT::descriptor_t;
+	template<typename MetaInterfaceT>
+	using interface_ext_value_t = interface_descriptor_t<MetaInterfaceT>::ext_value_t;
+
+	template<class MetaInterfaceT>
+	inline constexpr bool is_interface_has_object_field = requires { typename MetaInterfaceT::object_t; };
+	template<class MetaInterfaceT, bool>
+	struct interface_contained{using type = typename MetaInterfaceT::object_t; };
+	template<class MetaInterfaceT>
+	struct interface_contained<MetaInterfaceT, false> { using type = void; };
+	template<class MetaInterfaceT>
+	using interface_contained_t = interface_contained<MetaInterfaceT, is_interface_has_object_field<MetaInterfaceT>>::type;
 
 
 #define ESB_INTERFACEDEF_TERM(NAME_EN_, NAME_RU_)	ESB_T(NAME_EN_), ESB_T(NAME_RU_)
 
-#define ESB_INTERFACEDEF(CLASS_T_, DESCRIPTOR_T_, GUID_STR_, NAME_PAIR_, TEXT_)				\
+#define ESB_INTERFACEDEF(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)							\
 	template<>																				\
-	struct interface_info_t<CLASS_T_> {														\
+	struct esb::_internal::interface_info_t<CLASS_T_> {										\
 		using object_t = CLASS_T_;															\
-		using descriptor_t = DESCRIPTOR_T_< CLASS_T_ >;										\
-		static constexpr CLSID				TypeId_ = guid_from_hex(GUID_STR_);				\
-		static constexpr FixedTerm			TypeTerm_{ ESB_INTERFACEDEF_TERM NAME_PAIR_ };	\
-		static constexpr strview_t			TypeDescriptionInit_{ ESB_T(TEXT_) };
+		static constexpr CLSID		ESB_INTERFACE_TYPEID_FIELD = guid_from_hex(GUID_STR_);	\
+		static constexpr FixedTerm	TypeTerm_{ ESB_INTERFACEDEF_TERM NAME_PAIR_ };			\
+		static constexpr strview_t	TypeDescriptionInit_{ ESB_T(TEXT_) };
 
 
-#define ESB_INTERFACEDEF_DESCRIPTOR_T(CLASS_T_)		esb::interface_info_t<CLASS_T_>::descriptor_t
+#define ESB_INTERFACEDEF_DESCRIPTOR_T(CLASS_T_)		esb::_internal::interface_info_t<CLASS_T_>::descriptor_t
 
 
 
 	template<class ExtObjectT> consteval bool dispinterface_check();
 
-#define ESB_INTERFACEDEF_DONE(CLASS_T_)		\
-	};	static_assert(dispinterface_check< esb::interface_info_t<CLASS_T_>::descriptor_t::interface_t > () == true, "invalid dispinterface for " #CLASS_T_ )
+#define ESB_INTERFACEDEF_DONE(CLASS_T_)												\
+		using descriptor_t = esb::_internal::TypeDescriptor<CLASS_T_>;				\
+	};	static_assert(esb::_internal::dispinterface_check< esb::_internal::interface_info_t<CLASS_T_>::descriptor_t::disp_interface_t > () == true, "invalid dispinterface for " #CLASS_T_ )
 
 
-#define ESB_INTERFACEDEF_OBJECT_STABLE(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)					\
-	ESB_INTERFACEDEF(CLASS_T_, TypeDescriptorValueObjectStable, GUID_STR_, NAME_PAIR_, TEXT_)
+#define ESB_INTERFACEDEF_OBJECT_STABLE(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)		\
+	ESB_INTERFACEDEF(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)
 
 
-#define ESB_INTERFACEDEF_VALUE(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)							\
-	ESB_INTERFACEDEF(CLASS_T_, TypeDescriptorValueSimpleAuto, GUID_STR_, NAME_PAIR_, TEXT_)		\
-		ESB_META_CTOR_INTERFACE_VALUE_AUTO(CLASS_T_);											\
+#define ESB_INTERFACEDEF_VALUE(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)				\
+	ESB_INTERFACEDEF(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)						\
+		ESB_META_CTOR_INTERFACE_VALUE_AUTO(CLASS_T_);								\
 	ESB_INTERFACEDEF_DONE(CLASS_T_)
 
 
@@ -156,6 +188,71 @@ namespace esb // esb-meta
 	inline constexpr bool is_interface_has_meth_info_find = requires { ExtObjectT::ESB_INTERFACE_METH_FIND_FIELD; };
 	template<class ExtObjectT>
 	inline constexpr bool is_interface_has_ctor_info_find = requires { ExtObjectT::ESB_INTERFACE_CTOR_FIND_FIELD; };
+
+
+
+#define ESB_CONTAINED_IXCOLLECTION_SIZE				IxCollection_Size
+#define ESB_CONTAINED_IXCOLLECTION_GETVALUE			IxCollection_GetValue
+#define ESB_CONTAINED_IXCOLLECTION_SETVALUE			IxCollection_SetValue
+#define ESB_CONTAINED_GETENUMERATOR					IEnumeratable_GetEnumerator
+
+	// при проверке наличия методов мы проверяем именно имя, а не сигнатуру
+	// если сигнатура будет не та, то компилятор при вызове об этом расскажет
+	template<typename T>
+	inline constexpr bool is_contained_has_Size = (requires {
+		&T::ESB_CONTAINED_IXCOLLECTION_SIZE;
+	});
+	template<typename T>
+	inline constexpr bool is_contained_has_GetValue = (requires {
+		&T::ESB_CONTAINED_IXCOLLECTION_GETVALUE;
+	});
+	// для проверки наличия метода установки значения мы требуем чтобы T был НЕ-константой
+	// нам нужно проверить именно наличие этого метода. но метод должен быть НЕ константным. ошибочно константный - будет ош. вызова. 
+	template<typename T>
+	requires (!std::is_const_v<T>)
+		inline constexpr bool is_contained_has_SetValue = (requires {
+		&T::ESB_CONTAINED_IXCOLLECTION_SETVALUE;
+	});
+	template<typename T>
+	inline constexpr bool is_contained_has_GetEnumerator = (requires { &T::ESB_CONTAINED_GETENUMERATOR; });
+
+
+	template<typename T>
+	inline constexpr bool is_entity_iteratable = requires {
+		typename T::const_iterator;
+	};
+	static_assert(is_entity_iteratable<std::vector<bool>>);
+	static_assert(is_entity_iteratable<const std::vector<bool>>);
+	static_assert(!is_entity_iteratable<int>);
+
+	template<typename T>
+	inline constexpr bool is_entity_has_size = requires(T* v) {
+		typename T::size_type;
+		{ v->size() } -> std::same_as < typename T::size_type >;
+	};
+	template<typename T>
+	inline constexpr bool is_entity_has_operator_set = requires(T* v) {
+		{ v->operator[](std::declval<typename T::size_type>()) } -> std::same_as< typename T::reference >;
+	};
+	template<typename T>
+	inline constexpr bool is_entity_has_operator_get = requires(const T * v) {
+		{ v->operator[](std::declval<typename T::size_type>()) } -> std::same_as< typename T::const_reference >;
+	};
+	//
+	template<typename T>
+	inline constexpr bool is_entity_indexable_w = is_entity_has_size<T> && is_entity_has_operator_set<T>;
+	template<typename T>
+	inline constexpr bool is_entity_indexable_r = is_entity_has_size<T> && is_entity_has_operator_get<T>;
+	//
+	static_assert(is_entity_indexable_r<const std::vector<bool>> == true);
+	static_assert(is_entity_indexable_w<const std::vector<bool>> == false);
+	static_assert(is_entity_indexable_r<void> == false);
+	static_assert(is_entity_indexable_w<void> == false);
+
+
+
+
+
 
 
 	template<class T>
@@ -271,8 +368,8 @@ namespace esb // esb-meta
 
 
 	template<typename RetTypeT, typename ... ParamTypesT>
-	struct Invoker<typename RetTypeT(ParamTypesT...)> : public InvokerImpl<void, RetTypeT, ParamTypesT...> {
-		using base_t = InvokerImpl<void, RetTypeT, ParamTypesT...>;
+	struct Invoker<typename RetTypeT(ParamTypesT...)> : public esb::_internal::InvokerImpl<void, RetTypeT, ParamTypesT...> {
+		using base_t = esb::_internal::InvokerImpl<void, RetTypeT, ParamTypesT...>;
 
 		static void invoke_as_meth(base_t::func_t func_, IVariable* ret_, const argpack_t& args_) {
 			if (args_.size() != base_t::param_count_)
@@ -292,8 +389,8 @@ namespace esb // esb-meta
 
 
 	template<typename ClassTypeT, typename RetTypeT, typename ... ParamTypesT>
-	struct Invoker<typename RetTypeT(ClassTypeT::*)(ParamTypesT...)> : public InvokerImpl<ClassTypeT, RetTypeT, ParamTypesT...> {
-		using base_t = InvokerImpl<ClassTypeT, RetTypeT, ParamTypesT...>;
+	struct Invoker<typename RetTypeT(ClassTypeT::*)(ParamTypesT...)> : public esb::_internal::InvokerImpl<ClassTypeT, RetTypeT, ParamTypesT...> {
+		using base_t = esb::_internal::InvokerImpl<ClassTypeT, RetTypeT, ParamTypesT...>;
 
 		static void invoke_as_meth(base_t::class_t& inst_, base_t::func_t func_, IVariable* ret_, const argpack_t& args_) {
 			if (args_.size() != base_t::param_count_)
@@ -308,8 +405,8 @@ namespace esb // esb-meta
 
 
 	template<typename ClassTypeT, typename RetTypeT, typename ... ParamTypesT>
-	struct Invoker<typename RetTypeT(ClassTypeT::*)(ParamTypesT...) const> : public InvokerImpl<ClassTypeT, RetTypeT, ParamTypesT...> {
-		using base_t = InvokerImpl<ClassTypeT, RetTypeT, ParamTypesT...>;
+	struct Invoker<typename RetTypeT(ClassTypeT::*)(ParamTypesT...) const> : public esb::_internal::InvokerImpl<ClassTypeT, RetTypeT, ParamTypesT...> {
+		using base_t = esb::_internal::InvokerImpl<ClassTypeT, RetTypeT, ParamTypesT...>;
 
 		static void invoke_as_meth(const base_t::class_t& inst_, base_t::const_func_t func_, IVariable* ret_, const argpack_t& args_) {
 			if (args_.size() != base_t::param_count_)
@@ -334,11 +431,11 @@ namespace esb // esb-meta
 		using descriptor_t = ExtDescriptorT;
 		static constexpr size_t param_count_ = sizeof...(ParaTypesPackT);
 		template<size_t... Ix>
-		static IValuePtr invoke_as_ctor_impl(const TypeDescriptorValue& td_, const argpack_t& args_, std::index_sequence<Ix...>) {
+		static IValuePtr invoke_as_ctor_impl(const TypeInfo& td_, const argpack_t& args_, std::index_sequence<Ix...>) {
 			return IValuePtr{ descriptor_t::CreateValueInstance(static_cast<const descriptor_t&>(td_),
 																		check_and_make_from_var_ex<std::remove_cvref_t<ParaTypesPackT>>(args_[Ix])...) };
 		}
-		static IValuePtr invoke_as_ctor(const TypeDescriptorValue& td_, const argpack_t& args_) {
+		static IValuePtr invoke_as_ctor(const TypeInfo& td_, const argpack_t& args_) {
 			if (args_.size() != param_count_)
 				ESL_THROW_NOTCTXPARACOUNT();
 			return invoke_as_ctor_impl(td_, args_, std::make_index_sequence<param_count_>{});
@@ -445,15 +542,19 @@ namespace esb // esb-meta
 		using						invoker_t = Invoker< std::remove_pointer_t<meth_t> >;
 		static constexpr meth_t		func_ = MethPtr;
 
-		static void invoke(IVariable* retv_, const argpack_t& args_) requires std::is_same_v<invoker_t::class_t, void> {
+		static void invoke_stat(IVariable* retv_, const argpack_t& args_) requires std::is_same_v<invoker_t::class_t, void> {
 			return invoker_t::invoke_as_meth(func_, retv_, args_);
 		}
 		// интерфейс объекта. позволяет привязать к объекту статические (или даже чужие или свободные) методы, "тихо" глотая obj_ 
-		static void invoke(ExtValueObjectBase& obj_, IVariable* retv_, const argpack_t& args_) {
+		template<class ExValueT>
+		static void invoke_memb(ExValueBase& obj_base_, IVariable* retv_, const argpack_t& args_) {
 			if constexpr (std::is_same_v<invoker_t::class_t, void>)
 				return invoker_t::invoke_as_meth(func_, retv_, args_);
-			else
-				return invoker_t::invoke_as_meth(obj_.GetContainedData<invoker_t::class_t>(), func_, retv_, args_);
+			else {
+				ExValueT& obj = static_cast<ExValueT&>(obj_base_);
+				//return invoker_t::invoke_as_meth(obj_.GetContainedData<invoker_t::class_t>(), func_, retv_, args_);
+				return invoker_t::invoke_as_meth(obj.ContainedData_, func_, retv_, args_);
+			}
 		}
 		MetaNameData<NEn>			name_;
 		MetaNameData<NRu>			alias_;
@@ -465,9 +566,12 @@ namespace esb // esb-meta
 		// В дисп-интерефейс объекта можно привязать статический\свободный метод - наша реализация при этом тихо глотает obj-instance
 		// Но DispInfoStatMeth нельзя создать из member_function_pointer - obj-instance взять просто неоткуда
 		// (в принципе и без static_assert ошибка будет, но ее понять тяжело...)
-		template<typename DispInfoT> consteval DispInfoT make_dispinfo() const {
+		template<class ExValueT, typename DispInfoT> consteval DispInfoT make_dispinfo() const {
 			static_assert(std::is_same_v<DispInfoT, DispInfoMembMeth> || std::is_same_v<invoker_t::class_t, void>, "invalid dispinfo request.");
-			return /*DispInfoT*/{ {name_, alias_}, invoker_t::make_meth_info(), invoke };
+			if constexpr(std::is_same_v< ExValueT, void>)
+				return /*DispInfoT*/{ {name_, alias_}, invoker_t::make_meth_info(), invoke_stat };
+			else
+				return /*DispInfoT*/{ {name_, alias_}, invoker_t::make_meth_info(), invoke_memb<ExValueT> };
 		}
 	};
 
@@ -487,7 +591,7 @@ namespace esb // esb-meta
 	// Макросы упрощающие вызов построителя мета-элементов-метод инетрфейса.
 	// базовый макрос позволяет иметь разными имя метода и английское (первое) имя для диспатч-интерфейса, но считаю это нежелательным т.к. рисковано нюансами
 	// (для простоты реализации макрос ожидает в первом параметре OBJ_ имя вместе с ::	- object_t:: / somewhat_t:: / <пусто>
-#define ESB_META_INTERFACE_MAKE_METH(OBJ_, NAME_EN_, NAME_RU_)		make_MetaInterfaceMeth<& OBJ_ NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
+#define ESB_META_INTERFACE_MAKE_METH(OBJ_, NAME_EN_, NAME_RU_)		esb::_internal::make_MetaInterfaceMeth<& OBJ_ NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
 // Основные макросы описывающие мета-интерфейс методов объекта строят его для предопределенного в структуре псевданима object_t
 #define ESB_META_INTERFACE_MEMB_METH(NAME_EN_, NAME_RU_)		ESB_META_INTERFACE_MAKE_METH(ESB_INTERFACE_OBJECT_FIELD ::, NAME_EN_, NAME_RU_)
 #define ESB_META_INTERFACE_STAT_METH(NAME_EN_, NAME_RU_)		ESB_META_INTERFACE_MAKE_METH(ESB_INTERFACE_OBJECT_FIELD ::, NAME_EN_, NAME_RU_)
@@ -517,7 +621,7 @@ namespace esb // esb-meta
 	}
 
 	// Макрос упрощающий создание списка методов. Аргументы - макросы ESB_META_INTERFACE_xxx_METH. в конце требует ;
-#define ESB_META_INTERFACE_METH(...)	static constexpr auto ESB_INTERFACE_METH_META_FIELD = make_meta_interface_meth (__VA_ARGS__ )
+#define ESB_META_INTERFACE_METH(...)	static constexpr auto ESB_INTERFACE_METH_META_FIELD = esb::_internal::make_meta_interface_meth (__VA_ARGS__ )
 
 
 	// Все тоже самое для свойств (с небольшой спецификой). Свойство - это два метода: 
@@ -536,24 +640,31 @@ namespace esb // esb-meta
 
 		// имеем два интерфейса - и для ExtInterfaceStatPropInfo и для ExtInterfaceMembPropInfo
 		// интерфейс для статических свойств (не привязаннях к экземпляру объекта). доступен только для инвокеров без объекта
-		static void invoke_get(IVariable& retval_)				requires (std::is_same_v<invoker_get_t::class_t, void>) {
+		static void invoke_get_void(IVariable& retval_)	//			requires (std::is_same_v<invoker_get_t::class_t, void>) 
+		{
 			return invoker_get_t::invoke_as_prop_get(func_get_, retval_);
 		}
-		static void invoke_set(const IVariable& newval_)		requires (std::is_same_v<invoker_set_t::class_t, void>) {
+
+		static void invoke_get_stat(IVariable& retval_)				requires (std::is_same_v<invoker_get_t::class_t, void>) {
+			return invoker_get_t::invoke_as_prop_get(func_get_, retval_);
+		}
+		static void invoke_set_stat(const IVariable& newval_)		requires (std::is_same_v<invoker_set_t::class_t, void>) {
 			return invoker_set_t::invoke_as_prop_set(func_set_, newval_);
 		}
 		// интерфейс для свойств объекта. допускает "тихо" привязать к объекту статические свойства
-		static void invoke_get(const ExtValueObjectBase& obj_, IVariable& retval_) {
+		template<class ExValueT>
+		static void invoke_get_memb(const ExValueBase& obj_base_, IVariable& retval_) {
 			if constexpr (std::is_same_v<invoker_get_t::class_t, void>)
 				return invoker_get_t::invoke_as_prop_get(func_get_, retval_);
 			else
-				return invoker_get_t::invoke_as_prop_get(obj_.GetContainedData<invoker_get_t::class_t>(), func_get_, retval_);
+				return invoker_get_t::invoke_as_prop_get(static_cast<const ExValueT&>(obj_base_).ContainedData_, func_get_, retval_);
 		}
-		static void invoke_set(ExtValueObjectBase& obj_, const IVariable& newval_) {
+		template<class ExValueT>
+		static void invoke_set_memb(ExValueBase& obj_base_, const IVariable& newval_) {
 			if constexpr (std::is_same_v<invoker_set_t::class_t, void>)
 				return invoker_set_t::invoke_as_prop_set(func_set_, newval_);
 			else
-				return invoker_set_t::invoke_as_prop_set(obj_.GetContainedData<invoker_set_t::class_t>(), func_set_, newval_);
+				return invoker_set_t::invoke_as_prop_set(static_cast<ExValueT&>(obj_base_).ContainedData_, func_set_, newval_);
 		}
 
 		MetaNameData<NEn>			name_;
@@ -566,10 +677,26 @@ namespace esb // esb-meta
 		// и компилятор выбирает из двух вариантов требуемый.
 		// (пс. с++ не имеет никакого иного механизма выбора конкретного метода из нескольких перегрузок кроме как 
 		// попытаться присвоить этот метод переменной (или возвращаемому значению) с типом нужного метода)
-		template<typename FnPtrT>	static consteval FnPtrT get_invoke_get() { CONSTEXPR_IIF(func_get_, return &invoke_get, return nullptr); }
-		template<typename FnPtrT>	static consteval FnPtrT get_invoke_set() { CONSTEXPR_IIF(func_set_, return &invoke_set, return nullptr); }
-		template<typename DispInfoT> consteval DispInfoT make_dispinfo() const {
-			return { {name_, alias_}, get_invoke_get<decltype(DispInfoT::invoke_get_)>(), get_invoke_set<decltype(DispInfoT::invoke_set_)>() };
+		template<class ExValueT, typename DispInfoT> consteval DispInfoT make_dispinfo() const {
+			// ExValueT это конечный класс метод которого нужно вызвать. 
+			// Может быть void. В этом случае можно вызывать только _stat (free) методы - без ExValueBase в сигнатуре.
+			// Если не void, то войдом может быть class_t у инвокера - в этом случае метод должен быть с ExValueBase, но должен тихо проглотить его.
+			decltype(DispInfoT::invoke_get_) pfn_get = nullptr;
+			if constexpr (func_get_) {
+				if constexpr (std::is_same_v<ExValueT, void>)
+					pfn_get = &invoke_get_stat;
+				else
+					pfn_get = &invoke_get_memb<ExValueT>;
+			}
+			decltype(DispInfoT::invoke_set_) pfn_set = nullptr;
+			if constexpr (func_set_) {
+				if constexpr (std::is_same_v<ExValueT, void>)
+					pfn_set = &invoke_set_stat;
+				else
+					pfn_set = &invoke_set_memb<ExValueT>;
+			}
+
+			return /*DispInfoT*/{{name_, alias_}, pfn_get, pfn_set};
 		}
 	};
 	//
@@ -583,9 +710,9 @@ namespace esb // esb-meta
 	}
 
 	// для задания области видимости OBJ_ нужно передавать в виде OBJ:: (или пусто)
-#define ESB_META_INTERFACE_MAKE_PROP_RW(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp< & OBJ_ Get##NAME_EN_, & OBJ_ Set##NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
-#define ESB_META_INTERFACE_MAKE_PROP_RO(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp< & OBJ_ Get##NAME_EN_, nullptr>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
-#define ESB_META_INTERFACE_MAKE_PROP_WO(OBJ_, NAME_EN_, NAME_RU_)	make_MetaInterfaceProp<nullptr, & OBJ_ Set##NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
+#define ESB_META_INTERFACE_MAKE_PROP_RW(OBJ_, NAME_EN_, NAME_RU_)	esb::_internal::make_MetaInterfaceProp< & OBJ_ Get##NAME_EN_, & OBJ_ Set##NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
+#define ESB_META_INTERFACE_MAKE_PROP_RO(OBJ_, NAME_EN_, NAME_RU_)	esb::_internal::make_MetaInterfaceProp< & OBJ_ Get##NAME_EN_, nullptr>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
+#define ESB_META_INTERFACE_MAKE_PROP_WO(OBJ_, NAME_EN_, NAME_RU_)	esb::_internal::make_MetaInterfaceProp<nullptr, & OBJ_ Set##NAME_EN_>( ESB_T( #NAME_EN_ ), ESB_T(NAME_RU_) )
 // для создания элементов интерфейса объекта мы требуем, чтобы в структуре описания интерфейса был определен object_t для которого создается интерфейс
 // все элементы интерфейса объекта определеяются для этого object_t
 // (TOBE: иначи можно наопределять для разных объектов и что получится неведомо..., неплохо бы сделать защиту получше...)
@@ -615,27 +742,28 @@ namespace esb // esb-meta
 		return std::make_tuple(std::forward<PropT>(args_)...);
 	}
 
-#define ESB_META_INTERFACE_PROP(...)	static constexpr auto ESB_INTERFACE_PROP_META_FIELD = make_meta_interface_prop (__VA_ARGS__ )
+#define ESB_META_INTERFACE_PROP(...)	static constexpr auto ESB_INTERFACE_PROP_META_FIELD = esb::_internal::make_meta_interface_prop (__VA_ARGS__ )
 
 
 
-	template<typename DescriptorT, typename ParaTypesPackT>
-	struct MetaInterfaceCtor {
-		using descriptor_t = DescriptorT;
+	template<typename ParaTypesPackT>
+	struct MetaInterfaceCtor 
+	{
 		using para_types_pack_t = ParaTypesPackT;
-		using invoker_t = ExtInvoker4CtorFromTypePack< descriptor_t, para_types_pack_t>;
-		template<typename DispInfoT> consteval DispInfoCtor make_dispinfo() const {
-			static_assert(std::is_same_v<DispInfoT, DispInfoCtor>, "expected DispInfoCtor");
+		//
+		template<class ExDescriptorT> consteval DispInfoCtor make_dispinfo() const {
+			using invoker_t = ExtInvoker4CtorFromTypePack<ExDescriptorT, para_types_pack_t>;
+
 			return /*DispInfoT*/{ invoker_t::param_count_, invoker_t::invoke_as_ctor };
 		}
 	};
 
-#define ESB_META_CTOR(...)	MetaInterfaceCtor< ESB_INTERFACE_DESCRIPTOR_FIELD, typepack< __VA_ARGS__ > >{}
+#define ESB_META_CTOR(...)	esb::_internal::MetaInterfaceCtor< typepack< __VA_ARGS__ > >{}
 
 	template<typename>
 	inline constexpr bool is_meta_interface_ctor = false;
-	template<typename TD, typename... ParaTypesPackT>
-	inline constexpr bool is_meta_interface_ctor<MetaInterfaceCtor<TD, typepack<ParaTypesPackT...>>> = true;
+	template<typename... ParaTypesPackT>
+	inline constexpr bool is_meta_interface_ctor<MetaInterfaceCtor<typepack<ParaTypesPackT...>>> = true;
 	template<typename T> concept MetaInterfaceCtorConcept = is_meta_interface_ctor<T>;
 
 
@@ -645,30 +773,32 @@ namespace esb // esb-meta
 	}
 	template<class ExtValueDataT>
 	consteval auto make_meta_interface_ctor_value_auto() {
-		using descriptor_t = ESB_INTERFACEDEF_DESCRIPTOR_T(ExtValueDataT);
 		if constexpr (is_compaitable_cpp_type<ExtValueDataT>)
 			//NOTE	Мы здесь декларируем не сам конструктор, а его описание. поэтому что-то типа "const ExtValueDataT&" не нужно
-			return make_meta_interface_ctor(MetaInterfaceCtor<descriptor_t, typepack<>>{}, MetaInterfaceCtor<descriptor_t, typepack<ExtValueDataT>>{} );
+			return make_meta_interface_ctor(MetaInterfaceCtor<typepack<>>{}, MetaInterfaceCtor<typepack<ExtValueDataT>>{});
 		else
-			return make_meta_interface_ctor(MetaInterfaceCtor<descriptor_t, typepack<>>{});
+			return make_meta_interface_ctor(MetaInterfaceCtor<typepack<>>{});
 	}
 
 
-#define ESB_META_CTOR_INTERFACE(...)					static constexpr auto ESB_INTERFACE_CTOR_META_FIELD = make_meta_interface_ctor (__VA_ARGS__ )
-#define ESB_META_CTOR_INTERFACE_VALUE_AUTO(CLASS_T_)	static constexpr auto ESB_INTERFACE_CTOR_META_FIELD = make_meta_interface_ctor_value_auto<CLASS_T_>()
+#define ESB_META_CTOR_INTERFACE(...)					static constexpr auto ESB_INTERFACE_CTOR_META_FIELD = esb::_internal::make_meta_interface_ctor (__VA_ARGS__ )
+#define ESB_META_CTOR_INTERFACE_VALUE_AUTO(CLASS_T_)	static constexpr auto ESB_INTERFACE_CTOR_META_FIELD = esb::_internal::make_meta_interface_ctor_value_auto<CLASS_T_>()
 
 
 
 	// это ошибочная реакция студии на { std::get<MetaTupleIx>(meta_).make_dispinfo<DispInfoT>() ... } (см.примечание к ESB_WARN_INIT_WITH_BRACES)
 	ESB_WARNING_SUPRESS(ESB_WARN_INIT_WITH_BRACES)
+	//
+	// DispInfoT - это структура DispInfo(Stat|Memb)(Meth|Prop) и мы делам массив этих структур для диспатч интерфейса из МетаТупл - интерфейса. 
+	// Непосредственно с tuple в рантайме работать можно, но неудобно и неэффективно, а массив - очень удобно и очень эффективно
+	template<class DispInfoT, class InterfaceT>
+	class disp_interface_array_maker_t 
+	{
+		using ext_value_t = interface_ext_value_t<InterfaceT>;
 		//
-			// DispInfoT - это структура DispInfo(Stat|Memb)(Meth|Prop) и мы делам массив этих структур для диспатч интерфейса из МетаТупл - интерфейса. 
-			// Непосредственно с tuple в рантайме работать можно, но неудобно и неэффективно, а массив - очень удобно и очень эффективно
-		template<class DispInfoT>
-	class disp_interface_array_maker_t {
 		template<typename MetaTupleT, size_t... MetaTupleIx>
 		static consteval std::array<DispInfoT, std::tuple_size_v<MetaTupleT>> make_impl(const MetaTupleT& meta_, std::index_sequence<MetaTupleIx...>) {
-			return { std::get<MetaTupleIx>(meta_).make_dispinfo<DispInfoT>() ... };
+			return { std::get<MetaTupleIx>(meta_).make_dispinfo<ext_value_t, DispInfoT>() ... };
 		}
 	public:
 		template<typename MetaTupleT>
@@ -686,12 +816,32 @@ namespace esb // esb-meta
 				return make_impl(meta_, std::make_index_sequence<std::tuple_size_v<MetaTupleT>>{});
 		}
 	};
+
+	template<class InterfaceT>
+	class disp_interface_array_maker_t<DispInfoCtor, InterfaceT>
+	{
+		using descriptor_t = interface_descriptor_t<InterfaceT>;
+		//
+		template<typename MetaTupleT, size_t... MetaTupleIx>
+		static consteval std::array<DispInfoCtor, std::tuple_size_v<MetaTupleT>> make_impl(const MetaTupleT& meta_, std::index_sequence<MetaTupleIx...>) {
+			return { std::get<MetaTupleIx>(meta_).make_dispinfo<descriptor_t>() ... };
+		}
+	public:
+		template<typename MetaTupleT>
+		static consteval std::array<DispInfoCtor, std::tuple_size_v<MetaTupleT>> make(const MetaTupleT& meta_) {
+			if constexpr (std::tuple_size_v<MetaTupleT> == 0)
+				static_assert(always_false_v<DispInfoCtor>, "DispInfoT array with zero size not supported.");
+			else
+				return make_impl(meta_, std::make_index_sequence<std::tuple_size_v<MetaTupleT>>{});
+		}
+	};
+
 	//
 	ESB_WARNING_RESTORE() //ESB_WARN_INIT_WITH_BRACES
 
-		template <typename DispInfoT, typename MetaTupleT>
+	template <typename DispInfoT, class InterfaceT, typename MetaTupleT>
 	consteval std::array<DispInfoT, std::tuple_size_v<MetaTupleT>>  make_disp_interface_array(const MetaTupleT& face_) {
-		return disp_interface_array_maker_t<DispInfoT>::make(face_);
+		return disp_interface_array_maker_t<DispInfoT, InterfaceT>::make(face_);
 	}
 
 
@@ -775,7 +925,7 @@ namespace esb // esb-meta
 	};
 	template<class ExtInterfaceT>
 	struct DispFinderCtor {
-		static constexpr ExtInstanceCreatorFn* find(size_t cargs_) {
+		static constexpr ExInstanceCreatorFn* find(size_t cargs_) {
 			// используем примитивный поиск по порядку т.к. массив гарантировано (check_interface_ctor) сделан по-возрастанию, не содержит дублей и ожидается маленьким
 			for (const DispInfoCtor& c : ExtInterfaceT::ESB_INTERFACE_CTOR_INFO_FIELD) {
 				if (c.param_count_ == cargs_)
@@ -877,7 +1027,7 @@ namespace esb // esb-meta
 
 	// Имплементация для вызова конструкторов объекта через дисп-интерфейса
 	template<class DispInterfaceT>
-	consteval ExtInstanceCreatorFindFn* dispinterface_impl_ctor_find() {
+	consteval ExInstanceCreatorFindFn* dispinterface_impl_ctor_find() {
 		if constexpr (is_interface_has_ctor_info_find<DispInterfaceT>)
 			return DispInterfaceT::ESB_INTERFACE_CTOR_FIND_FIELD;
 		else if constexpr (is_interface_has_ctor_info<DispInterfaceT>)
@@ -901,7 +1051,7 @@ namespace esb // esb-meta
 	struct dispinterface_part_meth<InterfaceT, DispInfoT, /*NeedDispInfo=*/ false> {};
 	template<typename InterfaceT, class DispInfoT>
 	struct dispinterface_part_meth<InterfaceT, DispInfoT, /*NeedDispInfo=*/ true> {
-		static constexpr auto ESB_INTERFACE_METH_INFO_FIELD = make_disp_interface_array<DispInfoT>(InterfaceT::ESB_INTERFACE_METH_META_FIELD);
+		static constexpr auto ESB_INTERFACE_METH_INFO_FIELD = make_disp_interface_array<DispInfoT, InterfaceT>(InterfaceT::ESB_INTERFACE_METH_META_FIELD);
 	};
 
 	template<typename InterfaceT, class DispInfoT, bool NeedDispInfo>
@@ -910,7 +1060,7 @@ namespace esb // esb-meta
 	struct dispinterface_part_prop<InterfaceT, DispInfoT, /*NeedDispInfo=*/ false> {};
 	template<typename InterfaceT, class DispInfoT>
 	struct dispinterface_part_prop<InterfaceT, DispInfoT, /*NeedDispInfo=*/ true> {
-		static constexpr auto ESB_INTERFACE_PROP_INFO_FIELD = make_disp_interface_array<DispInfoT>(InterfaceT::ESB_INTERFACE_PROP_META_FIELD);
+		static constexpr auto ESB_INTERFACE_PROP_INFO_FIELD = make_disp_interface_array<DispInfoT, InterfaceT>(InterfaceT::ESB_INTERFACE_PROP_META_FIELD);
 	};
 
 	template<typename InterfaceT, bool NeedDispInfo>
@@ -919,13 +1069,13 @@ namespace esb // esb-meta
 	struct dispinterface_part_ctor<InterfaceT, /*NeedDispInfo=*/ false> {};
 	template<typename InterfaceT>
 	struct dispinterface_part_ctor<InterfaceT, /*NeedDispInfo=*/ true> {
-		static constexpr auto ESB_INTERFACE_CTOR_INFO_FIELD = make_disp_interface_array<DispInfoCtor>(InterfaceT::ESB_INTERFACE_CTOR_META_FIELD);
+		static constexpr auto ESB_INTERFACE_CTOR_INFO_FIELD = make_disp_interface_array<DispInfoCtor, InterfaceT>(InterfaceT::ESB_INTERFACE_CTOR_META_FIELD);
 	};
 
 	template<typename InterfaceT, class DispInfoMethT, class DispInfoPropT>
 	struct dispinterface_base
-		: dispinterface_part_meth<InterfaceT, DispInfoMethT, is_interface_has_meth_meta<InterfaceT> && !is_interface_has_meth_info<InterfaceT>>,
-		dispinterface_part_prop<InterfaceT, DispInfoPropT, is_interface_has_prop_meta<InterfaceT> && !is_interface_has_prop_info<InterfaceT>>
+		:	dispinterface_part_meth<InterfaceT, DispInfoMethT, is_interface_has_meth_meta<InterfaceT> && !is_interface_has_meth_info<InterfaceT>>,
+			dispinterface_part_prop<InterfaceT, DispInfoPropT, is_interface_has_prop_meta<InterfaceT> && !is_interface_has_prop_info<InterfaceT>>
 	{};
 
 
@@ -1052,8 +1202,8 @@ namespace esb // esb-meta
 		for (size_t i = 0; i < count; ++i) {
 			int						c_para = (signed)ExtObjectT::ESB_INTERFACE_CTOR_INFO_FIELD[i].param_count_;
 
-			ExtInstanceCreatorFn*	c_func = ExtObjectT::ESB_INTERFACE_CTOR_INFO_FIELD[i].func_;
-			ExtInstanceCreatorFn*	p_func = finder_t::find(c_para);
+			ExInstanceCreatorFn*	c_func = ExtObjectT::ESB_INTERFACE_CTOR_INFO_FIELD[i].func_;
+			ExInstanceCreatorFn*	p_func = finder_t::find(c_para);
 			//TOBE	Нужно ждать constexpr static_assert или throw "compile-msg" или еще что. пока так. static_message сделать не получается.
 			if (c_para < i_para_count_prev)
 				return false;				//static_assert(always_false_v<ExtObjectT>, "dispinfo for ctor not sorted by param_count_.");
@@ -1087,7 +1237,7 @@ namespace esb // esb-meta
 			static_assert(dispinterface_check_ctor<ExtObjectT>(), "dispinterface for ctor invalid.");
 		}
 			
-		if constexpr(is_type_descriptor_object<ExtObjectT::ESB_INTERFACE_DESCRIPTOR_FIELD>)
+		if constexpr(is_type_descriptor_for_object<ExtObjectT::ESB_INTERFACE_DESCRIPTOR_FIELD>)
 			static_assert(b_meth || b_prop, "object interface empty.");
 		//
 		return true;

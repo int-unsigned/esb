@@ -38,7 +38,7 @@ namespace esb //API part
 	requires (sizeof...(EsbClassArgsT) <= 10)
 	inline String StrTemplate(ConstParam<String> Template_, ConstParam< EsbClassArgsT>... TemplateArguments1_10_) { ESB_INVOKE_API_FUNC1X(String, core83, StrTemplate, Template_, TemplateArguments1_10_); }
 #endif
-#if defined(ESB_USE_ENGLISH) && ESB_USE_ENGLISH
+#if defined(ESB_USE_RUSSIAN) && ESB_USE_RUSSIAN
 	template<EsbClassConcept ... EsbClassArgsT>
 	requires (sizeof...(EsbClassArgsT) <= 10)
 	inline Строка СтрШаблон(КонстПарам<Строка> Шаблон_, КонстПарам<EsbClassArgsT>... АргументыШаблона1_10_) { ESB_INVOKE_API_FUNC1X(String, core83, StrTemplate, Шаблон_, АргументыШаблона1_10_); }

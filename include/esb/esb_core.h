@@ -27,8 +27,6 @@
 //
 #include ESB_VER_DISPINFO_BASE_H
 
-//using xent = esb::_internal::_dispinfo::_v8309::EnumIdsFor<esb::SearchDirection>;
-
 
 // COM-like объекты применяют иную технику наследования - аггрегирование. Соответственно политика относительно виртуального деструктора иная.
 // (мы не создаем объекты через new и не уничтожаем их через delete. и вообще пока у нас нет ни наследования ни аггрегирования)
@@ -645,9 +643,9 @@ namespace esb
 		using dual_t = ObjExtraT;
 		using dual_interface_t = typename dual_t::interface_t;
 	protected:
-		ObjectDual(IValuePtr&& val_, IObjectPtr&& obj_, dual_interface_t&& ext_) : Object(std::move(val_), std::move(obj_)), ObjExtraT(std::move(ext_))
+		ObjectDual(IValuePtr&& val_, IObjectPtr&& obj_, dual_interface_t&& ext_) noexcept : Object(std::move(val_), std::move(obj_)), ObjExtraT(std::move(ext_))
 		{}
-		ObjectDual(nullptr_t) : Object(nullptr), ObjExtraT(nullptr)
+		constexpr ObjectDual(nullptr_t) noexcept : Object(nullptr), ObjExtraT(nullptr)
 		{}
 	};
 	//TOBE:	Здесь и для ObjectDual2 лучше сделать через специализацию структур нежли через наличие магического dual_t. 
@@ -669,10 +667,10 @@ namespace esb
 		using dual2_t = ObjExtraT2;
 		using dual2_interface_t = dual2_t::interface_t;
 	protected:
-		ObjectDual2(IValuePtr&& val_, IObjectPtr&& obj_, dual1_interface_t&& ex1_, dual2_interface_t&& ex2_)
+		ObjectDual2(IValuePtr&& val_, IObjectPtr&& obj_, dual1_interface_t&& ex1_, dual2_interface_t&& ex2_) noexcept
 			: Object(std::move(val_), std::move(obj_)), ObjExtraT1(std::move(ex1_)), ObjExtraT2(std::move(ex2_))
 		{}
-		ObjectDual2(nullptr_t) : Object(nullptr), ObjExtraT1(nullptr), ObjExtraT2(nullptr)
+		constexpr ObjectDual2(nullptr_t) noexcept : Object(nullptr), ObjExtraT1(nullptr), ObjExtraT2(nullptr)
 		{}
 	};
 	template<class T>
@@ -689,9 +687,9 @@ namespace esb
 		using dual_t = ObjExtraT;
 		using dual_interface_t = dual_t::interface_t;
 	protected:
-		ValueDual(IValuePtr&& val_, dual_interface_t&& ext_) : Value(std::move(val_)), ObjExtraT(std::move(ext_))
+		ValueDual(IValuePtr&& val_, dual_interface_t&& ext_) noexcept : Value(std::move(val_)), ObjExtraT(std::move(ext_))
 		{}
-		ValueDual(nullptr_t) : Value(nullptr), ObjExtraT(nullptr)
+		constexpr ValueDual(nullptr_t) noexcept : Value(nullptr), ObjExtraT(nullptr)
 		{}
 	};
 	template<class T>
@@ -849,7 +847,7 @@ namespace esb
 #define ESB_CLASS_IMPLEMENT_MAKE_OPT(CLASS_T_)			\
 	ESB_CLASS_DECLARE_NULLABLE(CLASS_T_);				\
 	using Value::is_null;								\
-	CLASS_T_(nullptr_t) noexcept : base_t(nullptr) {}
+	constexpr CLASS_T_(nullptr_t) noexcept : base_t(nullptr) {}
 
 
 	//fixup
@@ -1059,32 +1057,26 @@ namespace esb
 
 #define ESB_CLASS_IMPLEMENT_MAKE(CLASS_, BASE_)						\
 	using base_t = BASE_;											\
-	friend CLASS_ make<CLASS_>(IValuePtr&&);						\
-	CLASS_(IValuePtr&& val_) noexcept : base_t(std::move(val_)) {}
+	friend CLASS_ make<CLASS_>(IValuePtr&&);
 
 #define ESB_CLASS_IMPLEMENT_MAKE_VAL(CLASS_)					\
-	using base_t = Value;										\
-	friend CLASS_ make<CLASS_>(IValuePtr&&);					\
+	ESB_CLASS_IMPLEMENT_MAKE(CLASS_, Value)						\
 	CLASS_(IValuePtr&& val_) noexcept : base_t(std::move(val_)) {}
 
 #define ESB_CLASS_IMPLEMENT_MAKE_OBJ(CLASS_)					\
-	using base_t = Object;										\
-	friend CLASS_ make<CLASS_>(IValuePtr&&);					\
+	ESB_CLASS_IMPLEMENT_MAKE(CLASS_, Object)					\
 	CLASS_(IValuePtr&& val_, IObjectPtr&& obj_) noexcept : base_t(std::move(val_), std::move(obj_)) {}
 
 #define ESB_CLASS_IMPLEMENT_MAKE_OBJ_DUAL(CLASS_)				\
-	using base_t = ObjectDual;									\
-	friend CLASS_ make<CLASS_>(IValuePtr&&);					\
+	ESB_CLASS_IMPLEMENT_MAKE(CLASS_, ObjectDual)				\
 	CLASS_(IValuePtr&& val_, IObjectPtr&& obj_, dual_interface_t&& ixx_) noexcept : base_t(std::move(val_), std::move(obj_), std::move(ixx_)) {}
 
 #define ESB_CLASS_IMPLEMENT_MAKE_VAL_DUAL(CLASS_)				\
-	using base_t = ValueDual;									\
-	friend CLASS_ make<CLASS_>(IValuePtr&&);					\
+	ESB_CLASS_IMPLEMENT_MAKE(CLASS_, ValueDual)					\
 	CLASS_(IValuePtr&& val_, dual_interface_t&& ixx_) noexcept : base_t(std::move(val_), std::move(ixx_)) {}
 
 #define ESB_CLASS_IMPLEMENT_MAKE_OBJ_DUAL2(CLASS_)																\
-	using base_t = ObjectDual2;																					\
-	friend CLASS_ make<CLASS_>(IValuePtr&&);																	\
+	ESB_CLASS_IMPLEMENT_MAKE(CLASS_, ObjectDual2)																\
 	CLASS_(IValuePtr&& val_, IObjectPtr&& obj_, dual1_interface_t&& ix1_, dual2_interface_t&& ix2_) noexcept	\
 			: base_t(std::move(val_), std::move(obj_), std::move(ix1_), std::move(ix2_)) {}
 
@@ -1465,15 +1457,12 @@ ESB_WARNING_RESTORE()	//ESB_WARN_NO_OPERATOR_ASSIGN_ANY ESB_WARN_NO_DEFAULT_CTOR
 	inline const ArgDefaultUndefObj<EsbClassT>&		ПоУмолчаниюНеопределеноИли = DefUndef<EsbClassT>;
 #endif
 	namespace _internal {
-		//template<class T, auto V = T::Default_>
-		//inline const VarArgumentByValOnThat<const T> DefArgument{ V };
-
 		template<typename T>
 		const VarArgumentByValOnThat<const T>& DefArgument(const T& def_value_ = T::Default_) {
 			static const VarArgumentByValOnThat<const T> arg{ def_value_ };
 			return arg;
 		}
-
+// __VA_ARGS__ сделано для передачи шаблонов - макропроцессор их угловые скобки не понимает и __VA_ARGS__ шаблон потом из кусков назад собирает.
 #define ESB_DEFARG(T, ...)	_internal::DefArgument<T>(__VA_ARGS__)
 	}
 
@@ -1819,6 +1808,7 @@ namespace esb
 			friend struct EnumValueData;
 			//
 			constexpr ValueBaseForEnum() noexcept : Value(nullptr) {}
+			
 			//
 			//using Value::initialize;
 			friend void initialize_platform_enum_item(ValueBaseForEnum& enum_item_, IValuePtr&& enum_item_value_) {
@@ -1826,6 +1816,7 @@ namespace esb
 				//enum_item_.initialize(std::move(enum_item_value_));
 			}
 		protected:
+			constexpr ValueBaseForEnum(nullptr_t) noexcept : Value(nullptr) {}
 			ValueBaseForEnum(IValuePtr&& val_) noexcept : Value(std::move(val_)) {}
 		public:
 			// полагаемся на то, что равенство значений енумератора есть равенство указателей. 
@@ -1888,7 +1879,8 @@ namespace esb
 	using EnumId = _internal::_dispinfo::EnumIdsFor<CLASS_T_>
 
 #define ESB_CLASS_IMPLEMENT_MAKE_ENUM(CLASS_)						\
-	ESB_CLASS_IMPLEMENT_MAKE(CLASS_, _internal::ValueBaseForEnum)
+	ESB_CLASS_IMPLEMENT_MAKE(CLASS_, _internal::ValueBaseForEnum)	\
+	CLASS_(IValuePtr&& val_) noexcept : base_t(std::move(val_)) {}
 
 #define ESB_CLASS_ENUM_DATA(CLASS_)									\
 	using enum_data_t	= _internal::EnumValueData<CLASS_>;			\
@@ -2259,512 +2251,605 @@ namespace esb	// String. Дескриптор зависит от String поэ�
 
 
 
+
+
+
+
+
+
 namespace esb	// disp support
 {
+	namespace _internal
+	{
+
+		struct ExEntityBase;
+		//TODO	переделать везде
+		using ExValueBase = ExEntityBase;
+
+		using IEntityPtr = InterfacePtr<IUnknown>;
+		//
+		inline IEntityPtr query_entity_handler(IValue& value_) {
+			return { static_cast<IUnknown&>(value_) };
+		}
 
 
-// все классы построения дисп-интерфейса не предполагают наличие конструкторов по умолчанию. Но мы не можем явно в них показать =delete
-// т.к. они при этом становятся не-литеральными и не пригодными для констевал вычислений. Поэтому подавляем предупреждения.
-// также они могут содержать ссылки by-design и ввиду этого некопируемы. Подавляем.
-// Также, при развертывании шаблонов иногда появляется паддинг (типа std::array<strchar_t, NSize>	code_ при NSize==2). Подавляем.
-ESB_WARNING_SUPRESS(ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_ANY)
-//
-	// В этой структуре мы сохраняем указатель на строку-имя и подготавливаем массив для constexpr создания из этой строки уникального представления этой строки (code_)
-	// для того чтобы в рантайме этим не заниматься каждый раз. 
-	// (пока просто to_nocase(), но можно и какой-нибудь md5 считать, вопрос эффективности алгоритма сравнения в рантайме)
-	//TOBE	По какой-то причине компилятор не дает обработку\переработку строки в конструкторе - *доступ к хранилищу среды исполнения*.
-	//		это реализовано в методах make_MetaInterfaceMeth (см. esb_meta.h)
-	template<size_t NSize>
-	struct MetaNameData {
-		static constexpr size_t			len_ = NSize - 1;
-		const strchar_t*				text_;
-		std::array<strchar_t, NSize>	code_;
-		constexpr MetaNameData(const strchar_t(&str1_)[NSize]) : text_{ str1_ }, code_{}
-		{}
-	};
-
-	// Структура представляет одно имя метода (свойства) в диспатч-лайк массиве методов (свойств) объекта. 
-	// поле text_ - это оргинальное имя, поле code_ - преобразованное для упрощения алгоритма поиска по имени
-	struct DispName {
-		size_t						len_;
-		const strchar_t*			text_;
-		const strchar_t*			code_;
+		// все классы построения дисп-интерфейса не предполагают наличие конструкторов по умолчанию. Но мы не можем явно в них показать =delete
+		// т.к. они при этом становятся не-литеральными и не пригодными для констевал вычислений. Поэтому подавляем предупреждения.
+		// также они могут содержать ссылки by-design и ввиду этого некопируемы. Подавляем.
+		// Также, при развертывании шаблонов иногда появляется паддинг (типа std::array<strchar_t, NSize>	code_ при NSize==2). Подавляем.
+		ESB_WARNING_SUPRESS(ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_ANY)
+		//
+		// В этой структуре мы сохраняем указатель на строку-имя и подготавливаем массив для constexpr создания из этой строки уникального представления этой строки (code_)
+		// для того чтобы в рантайме этим не заниматься каждый раз. 
+		// (пока просто to_nocase(), но можно и какой-нибудь md5 считать, вопрос эффективности алгоритма сравнения в рантайме)
+		//TOBE	По какой-то причине компилятор не дает обработку\переработку строки в конструкторе - *доступ к хранилищу среды исполнения*.
+		//		это реализовано в методах make_MetaInterfaceMeth (см. esb_meta.h)
 		template<size_t NSize>
-		constexpr DispName(const MetaNameData<NSize>& data_) : len_(data_.len_), text_(data_.text_), code_(data_.code_.data())
-		{}
-		constexpr strview_t			text_view() const { return { text_, len_ }; }
-	};
+		struct MetaNameData {
+			static constexpr size_t			len_ = NSize - 1;
+			const strchar_t* text_;
+			std::array<strchar_t, NSize>	code_;
+			constexpr MetaNameData(const strchar_t(&str1_)[NSize]) : text_{ str1_ }, code_{}
+			{}
+		};
 
-	// 1С двуязычная (как минимум) соответственно каждый метод (свойство) определяется двумя именами (текстовыми идентификаторами)
+		// Структура представляет одно имя метода (свойства) в диспатч-лайк массиве методов (свойств) объекта. 
+		// поле text_ - это оргинальное имя, поле code_ - преобразованное для упрощения алгоритма поиска по имени
+		struct DispName {
+			size_t						len_;
+			const strchar_t* text_;
+			const strchar_t* code_;
+			template<size_t NSize>
+			constexpr DispName(const MetaNameData<NSize>& data_) : len_(data_.len_), text_(data_.text_), code_(data_.code_.data())
+			{}
+			constexpr strview_t			text_view() const { return { text_, len_ }; }
+		};
+
+		// 1С двуязычная (как минимум) соответственно каждый метод (свойство) определяется двумя именами (текстовыми идентификаторами)
 #define ESB_DISP_TERM_NAMES_COUNT 2
-	struct DispTerm {
-		// у нас два и только два имени! это жестко учитывается в make_interface_names_array_sorted
-		static constexpr size_t		names_count_ = ESB_DISP_TERM_NAMES_COUNT;
-		DispName					names_[names_count_];
-		constexpr size_t			names_count() const						{ return names_count_; }
-		constexpr const DispName&	name(size_t index_) const				{ assert(index_ < names_count());		return names_[index_]; }
-		constexpr strview_t			name_text(size_t index_) const			{ return name(index_).text_view(); }
-		constexpr const strchar_t*	name_code_cstr(size_t index_) const		{ return name(index_).code_;	}
-	};
-ESB_DETECT_MISMATCH(ESB_DISP_TERM_NAMES_COUNT)
+		struct DispTerm {
+			// у нас два и только два имени! это жестко учитывается в make_interface_names_array_sorted
+			static constexpr size_t		names_count_ = ESB_DISP_TERM_NAMES_COUNT;
+			DispName					names_[names_count_];
+			constexpr size_t			names_count() const { return names_count_; }
+			constexpr const DispName&	name(size_t index_) const { assert(index_ < names_count());		return names_[index_]; }
+			constexpr strview_t			name_text(size_t index_) const { return name(index_).text_view(); }
+			constexpr const strchar_t*	name_code_cstr(size_t index_) const { return name(index_).code_; }
+		};
+		ESB_DETECT_MISMATCH(ESB_DISP_TERM_NAMES_COUNT)
 
 
-	// Базовая структура для 1С-лайк-значений создаваемых в есб. (см.ниже в блоке ext)
-	// для вызова методов-экземпляров классов представляет инстанс класса. каждый класс знает как из "базы" получить себя.
-	struct ExtValueObjectBase;
+		// Базовая структура для 1С-лайк-значений создаваемых в есб. (см.ниже в блоке ext)
+		// для вызова методов-экземпляров классов представляет инстанс класса. каждый класс знает как из "базы" получить себя.
+		//struct ExtValueObjectBase;
+		//using ExtValueObjectBase = _internal::ExValueBase;
 
-	using DispInvokeMembMethFn		= void(ExtValueObjectBase&, IVariable*, const argpack_t&);
-	using DispInvokeMembPropGetFn	= void(const ExtValueObjectBase&, IVariable&);
-	using DispInvokeMembPropSetFn	= void(ExtValueObjectBase&, const IVariable&);
+		using DispInvokeMembMethFn = void(ExValueBase&, IVariable*, const argpack_t&);
+		using DispInvokeMembPropGetFn = void(const ExValueBase&, IVariable&);
+		using DispInvokeMembPropSetFn = void(ExValueBase&, const IVariable&);
 
-	using DispInvokeStatMethFn		= void(IVariable*, const argpack_t&);
-	using DispInvokeStatPropGetFn	= void(IVariable&);
-	using DispInvokeStatPropSetFn	= void(const IVariable&);
+		using DispInvokeStatMethFn = void(IVariable*, const argpack_t&);
+		using DispInvokeStatPropGetFn = void(IVariable&);
+		using DispInvokeStatPropSetFn = void(const IVariable&);
 
 
 
-	//NOTE	Если основывать битпак на uint64_t, то он получает выравнивание 8 и структурах DispInfo(Stat|Memb)Meth получаются паддинги. Несмертельно, но неприятно
-	//		В 64-битном варианте само пройдет.
-	//TOBE	Также можно поменять алгоритм на использование uint32_t[2], но думаю это стоит делать если еще какие вопросы/проблемы проявятся.
-	//		Этот "битпак" сам по себе сомнителен.. Может еще para_is_out делать придется..
-	struct DispMethInfo {
-		//    6         5         4         3         2         1
-		// 3210987654321098765432109876543210987654321098765432109876543210
-		//                   opts-in-reverse-order                  R*count
+		//NOTE	Если основывать битпак на uint64_t, то он получает выравнивание 8 и структурах DispInfo(Stat|Memb)Meth получаются паддинги. Несмертельно, но неприятно
+		//		В 64-битном варианте само пройдет.
+		//TOBE	Также можно поменять алгоритм на использование uint32_t[2], но думаю это стоит делать если еще какие вопросы/проблемы проявятся.
+		//		Этот "битпак" сам по себе сомнителен.. Может еще para_is_out делать придется..
+		struct DispMethInfo {
+			//    6         5         4         3         2         1
+			// 3210987654321098765432109876543210987654321098765432109876543210
+			//                   opts-in-reverse-order                  R*count
 #if ESB_POINTER_SIZE == 4
-		using bitpack_t = uint32_t;
+			using bitpack_t = uint32_t;
 #		define ESB_METHINFO_DATA_BITS		32
 #		define ESB_METHINFO_SIZE_BITS		5
-		// может быть всего 31 параметра из которых последние 26 могут быть опт. или для метода со всеми опт параметрами возмажно максимум 26 параметров
+			// может быть всего 31 параметра из которых последние 26 могут быть опт. или для метода со всеми опт параметрами возмажно максимум 26 параметров
 #elif ESB_POINTER_SIZE == 8
-		using bitpack_t = uint64_t;
+			using bitpack_t = uint64_t;
 #		define ESB_METHINFO_DATA_BITS		64
 #		define ESB_METHINFO_SIZE_BITS		6
-		// может быть всего 63 параметра из которых последние 57 могут быть опт. или для метода со всеми опт параметрами возмажно максимум 57 параметров
-		// (возможные варианты 15:32767-48; 7:127-56; 6:63-57)
+			// может быть всего 63 параметра из которых последние 57 могут быть опт. или для метода со всеми опт параметрами возмажно максимум 57 параметров
+			// (возможные варианты 15:32767-48; 7:127-56; 6:63-57)
 #else
 #	error ESB_POINTER_SIZE not defined or have wrong value/
 #endif
-		bitpack_t	data_;
-ESB_WARNING_SUPRESS(ESB_WARN_DETECT_MISMATCH_IN_SCOPE)
-ESB_CHECK_AND_DETECT_MISMATCH(ESB_METHINFO_DATA_BITS, (sizeof(bitpack_t)* CHAR_BIT))
-ESB_DETECT_MISMATCH(ESB_METHINFO_SIZE_BITS)
-ESB_WARNING_RESTORE() //ESB_WARN_DETECT_MISMATCH_IN_SCOPE
-		static constexpr bitpack_t	ESB_METHINFO_MASK_SIZE	= ((1 << ESB_METHINFO_SIZE_BITS) - 1);
-		static constexpr bitpack_t	ESB_METHINFO_MASK_RETV	= ESB_METHINFO_MASK_SIZE + 1;
-		static constexpr bitpack_t	ESB_METHINFO_MASK_OPTX	= (ESB_METHINFO_MASK_RETV << 1);
-		static constexpr size_t		MAX_PARA_COUNT			= ESB_METHINFO_MASK_SIZE;
-		static constexpr size_t		MAX_PARA_LAST_OPT_COUNT = (ESB_METHINFO_DATA_BITS - ESB_METHINFO_SIZE_BITS - 1);
+			bitpack_t	data_;
+			ESB_WARNING_SUPRESS(ESB_WARN_DETECT_MISMATCH_IN_SCOPE)
+			ESB_CHECK_AND_DETECT_MISMATCH(ESB_METHINFO_DATA_BITS, (sizeof(bitpack_t)* CHAR_BIT))
+			ESB_DETECT_MISMATCH(ESB_METHINFO_SIZE_BITS)
+			ESB_WARNING_RESTORE() //ESB_WARN_DETECT_MISMATCH_IN_SCOPE
+			static constexpr bitpack_t	ESB_METHINFO_MASK_SIZE = ((1 << ESB_METHINFO_SIZE_BITS) - 1);
+			static constexpr bitpack_t	ESB_METHINFO_MASK_RETV = ESB_METHINFO_MASK_SIZE + 1;
+			static constexpr bitpack_t	ESB_METHINFO_MASK_OPTX = (ESB_METHINFO_MASK_RETV << 1);
+			static constexpr size_t		MAX_PARA_COUNT = ESB_METHINFO_MASK_SIZE;
+			static constexpr size_t		MAX_PARA_LAST_OPT_COUNT = (ESB_METHINFO_DATA_BITS - ESB_METHINFO_SIZE_BITS - 1);
 
-		constexpr size_t	para_count() const				{ return (data_ & ESB_METHINFO_MASK_SIZE); }
-		constexpr bool		has_retval() const				{ return ((data_ & ESB_METHINFO_MASK_RETV) != 0); }
-		constexpr bool		para_is_opt(int n_para_) const	{
-			ESB_ASSERT(n_para_ >= 0 && (unsigned)n_para_ < para_count());
-			if (n_para_ >= ((int)para_count() - (int)MAX_PARA_LAST_OPT_COUNT)) {	//выражение может быть отрицательным поэтому нам важно чтобы вычислялос все в int!
-				size_t n_shift = para_count() - n_para_ - 1;
-				return ((data_ & (ESB_METHINFO_MASK_OPTX << n_shift)) != 0);
+			constexpr size_t	para_count() const { return (data_ & ESB_METHINFO_MASK_SIZE); }
+			constexpr bool		has_retval() const { return ((data_ & ESB_METHINFO_MASK_RETV) != 0); }
+			constexpr bool		para_is_opt(int n_para_) const {
+				ESB_ASSERT(n_para_ >= 0 && (unsigned)n_para_ < para_count());
+				if (n_para_ >= ((int)para_count() - (int)MAX_PARA_LAST_OPT_COUNT)) {	//выражение может быть отрицательным поэтому нам важно чтобы вычислялос все в int!
+					size_t n_shift = para_count() - n_para_ - 1;
+					return ((data_ & (ESB_METHINFO_MASK_OPTX << n_shift)) != 0);
+				}
+				else
+					return false;
 			}
-			else
-				return false;
-		}
-		//см. make_DispMethInfo(.). Для consteval-friendly все делаем не в конструкторе, а отдельно.
-		//(также есть стратегия отделить все raw-структуры от шаблонов чтобы esbhlp поменьше видел, думал и инлайнил)
-		static consteval bitpack_t make_para_bit(size_t para_count_, size_t n_para_, bool is_para_opt_) {
-			assert(n_para_ < para_count_);			
-			if (is_para_opt_) {
-				assert((int)n_para_ >= ((int)para_count_ - (int)MAX_PARA_LAST_OPT_COUNT));
-				size_t n_shift = para_count_ - n_para_ - 1;
-				return (ESB_METHINFO_MASK_OPTX << n_shift);
+			//см. make_DispMethInfo(.). Для consteval-friendly все делаем не в конструкторе, а отдельно.
+			//(также есть стратегия отделить все raw-структуры от шаблонов чтобы esbhlp поменьше видел, думал и инлайнил)
+			static consteval bitpack_t make_para_bit(size_t para_count_, size_t n_para_, bool is_para_opt_) {
+				assert(n_para_ < para_count_);
+				if (is_para_opt_) {
+					assert((int)n_para_ >= ((int)para_count_ - (int)MAX_PARA_LAST_OPT_COUNT));
+					size_t n_shift = para_count_ - n_para_ - 1;
+					return (ESB_METHINFO_MASK_OPTX << n_shift);
+				}
+				else
+					return 0;
 			}
-			else
-				return 0;
-		}
-	};
+		};
 
 
-	//NOTE	Структурам DispInfo... нельзя выделять базовый - тривиальность теряют и проблемы начинаются
-	struct DispInfoStatMeth  {
-		const DispTerm				term_;
-		const DispMethInfo			info_;
-		DispInvokeStatMethFn&		invoke_;
-	};
+		//NOTE	Структурам DispInfo... нельзя выделять базовый - тривиальность теряют и проблемы начинаются
+		struct DispInfoStatMeth {
+			const DispTerm				term_;
+			const DispMethInfo			info_;
+			DispInvokeStatMethFn&		invoke_;
+		};
 
-	struct DispInfoMembMeth {
-		DispTerm					term_;
-		const DispMethInfo			info_;
-		DispInvokeMembMethFn&		invoke_;
-	};
+		struct DispInfoMembMeth {
+			DispTerm					term_;
+			const DispMethInfo			info_;
+			DispInvokeMembMethFn&		invoke_;
+		};
 
-	struct DispInfoStatProp {
-		DispTerm					term_;
-		DispInvokeStatPropGetFn*	invoke_get_;
-		DispInvokeStatPropSetFn*	invoke_set_;
-	};
+		struct DispInfoStatProp {
+			DispTerm					term_;
+			DispInvokeStatPropGetFn*	invoke_get_;
+			DispInvokeStatPropSetFn*	invoke_set_;
+		};
 
-	struct DispInfoMembProp {
-		DispTerm					term_;
-		DispInvokeMembPropGetFn*	invoke_get_;
-		DispInvokeMembPropSetFn*	invoke_set_;
-	};
+		struct DispInfoMembProp {
+			DispTerm					term_;
+			DispInvokeMembPropGetFn*	invoke_get_;
+			DispInvokeMembPropSetFn*	invoke_set_;
+		};
 
-	struct DispInfoCtor;		//после TypeDescriptor
-//
-ESB_WARNING_RESTORE()	//ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_ANY
+		struct DispInfoCtor;		//после TypeDescriptor
+	//
+		ESB_WARNING_RESTORE()	//ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_ANY
+	} // _internal
 }	//namespace esb disp support
+
 
 
 
 // esb ext support
 namespace esb {
-//
+	namespace _internal
+	{
+		struct TypeInfo;
+		//
+		using ExInstanceCreatorFn = IValuePtr(const TypeInfo&, const argpack_t&);
+		using ExInstanceCreatorFindFn = ExInstanceCreatorFn*(size_t);
+
+		//TODO	Нужно отвязаться от String тогда у нас и деструктор станет constexpr и мы полностью будем constexpr
+		//		(inplace-new + explicit~dtor сделать)
+		//		Нужно сделать отдельный список on_runtime_term для дескрипторов где и освобождать TypeDescription_
+		struct TypeInfoBase
+		{
+			const CLSID&				TypeId_;
+			const FixedTerm&			TypeTerm_;
+			const string_view_t&		TypeDescriptionInit_;
+			//NOTE	Какое либо поле (и лучше это) обязано быть mutable. Тогда компилятор эту constexpr структуру укладывает в секцию data (rw),
+			//		а не в rodata. Т.е. структура вся constexpr, но можно что-то переписывать. 
+			//		(Если структура в rodata, то при попытке переписать крах)
+			//		Это нам важно для наших наследников - TypeDescriptor... Мы их в рантайме правильной vtbl инициализируем.
+			mutable Nullable<String>	TypeDescription_{ nullptr };
+			//...
+			ExInstanceCreatorFindFn*	InstanceCreatorFind_{ nullptr };	// если nullptr, то средствами 1С объект не создается (исключение: нет параметров)
+		protected:
+			constexpr TypeInfoBase(const CLSID& type_id_, const FixedTerm& type_term_, const string_view_t& type_description_)
+				: TypeId_(type_id_), TypeTerm_(type_term_), TypeDescriptionInit_(type_description_)
+			{}
+
+		};
+		//NOTE	заглушка. настоящий интерфейс ставится в esbhlp
+		class __declspec(novtable) TypeInfoInterfaceImpl : public IType 
+		{
+			STDMETHOD(QueryInterface)(REFIID, void**) throw() override	{ return E_NOTIMPL; }
+			STDMETHOD_(ULONG, AddRef)() throw() override				{ return 1; }
+			STDMETHOD_(ULONG, Release)() throw() override				{ return 1; }
+		};
+		//
+		struct TypeInfo : public TypeInfoInterfaceImpl, public TypeInfoBase
+		{	ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeInfo);
+		protected:
+			constexpr TypeInfo(const CLSID& id_, const FixedTerm& term_, const string_view_t& description_)
+				: TypeInfoInterfaceImpl{}, TypeInfoBase(id_, term_, description_)
+			{}
+		public:
+			// вызываются при OnRuntimeStartup/Cleanup
+			static void on_runtime_init(const TypeInfo& type_) {
+				//множественная инициализаци дескриптора не катострофична, но все равно свидетельствует о какой-то ошибке
+				assert(!type_.TypeDescription_);
+				if (!type_.TypeDescription_)
+					type_.TypeDescription_ = String(type_.TypeDescriptionInit_);
+			}
+			static void on_runtime_term(const TypeInfo& type_) {
+				type_.TypeDescription_ = nullptr;
+			}
+			// esbhlp. вызывается при регистрации типа.	TODO а ExRegisterType что делает????
+			static IType& InitTypeInfoInterface(TypeInfo& typ_);
+		};
+
+		//esbhlp
+		//INFO	Регистрировать типы в платформе нужно только если Вы хотите создавать их в коде 1С с помощью Новый(Тип(...))
+		//		Но это достаточно не удобно т.к. 1С пытается проверять имя типа и ее приходится обманывать
+		//		Также при таком создании неудобно ограниченно передавать параметры конструктору.
+		//		На мой взгляд удобнее сделать к своему типу XXXX метод CreateXXX в интерфейсе есб-addin-object.
+		//		Для такого создания регистрировать ничего не надо, и, от-регистрировать тоже. И с параметрами проще.
+		//		Поэтому эти методы "на любителя" Вы можете вызывать сами. Есб их не использует.
+		bool ExTypeRegister(const TypeInfo& descriptor_, IClassFactory& factory_);
+		bool ExTypeRevoke(const TypeInfo& descriptor_);
+	} //_internal
+} // esb
+
+
+
+namespace esb
+{
+	namespace _internal
+	{
+		struct ExEntityBase 
+		{
+			const TypeInfo* m_type_info = nullptr;		//TODO	может ссылку?
+		};
+		struct ExEntitySingleton : ExEntityBase
+		{
+			//
+		};
+		struct ExEntityInstance : ExEntityBase
+		{
+			refcounter_t	m_refs{};
+		};
+	}
+}
+
+
+namespace esb
+{
 	class Boolean;
 	class Numeric;
 	class DateTime;
 
+	namespace _internal
+	{
+		// Диспатч-интерфейс реализуется двумя массивами (для Prop и Meth) и тремя методами для каждого массива - Size, Find, Item (Prop или Meth)
+		// Интерфейс может быть стабильным - т.е. в рантайме ничего не меняется (т.е. каждому из методов не нужен параметр экземпляра)
+		// и динамическим - в рантайме может измениться кол-во свойств/методов/их-имена/реализация - тогда нужена ссылка на экземпляр в параметрах
+		// (интерфейс - статичный/динамический, методы - статические/экземпляра)
+		// 
+		//TODO	оно не Stable, а Stat.  Stable/Mutable делается конкретный дескриптор
+		using DispStableSizeFn		= size_t(void);
+		using DispStableFindFn		= dispid_t(const strview_t&);
+		// Для статических методов не нужен экземпляр объекта относительно которого они вызываются
+		using DispStatPropFn		= const DispInfoStatProp*(dispid_t);
+		using DispStatMethFn		= const DispInfoStatMeth*(dispid_t);
+		using DispStatMethParaDefFn = bool(dispid_t meth_, dispid_t para_, IVariable* out_def_value_);
 
-// Данная структура описывает наше (1С) тип-инфо и не предназначена ни для какого использования кроме как статического создания в единственном экземпляре на этапе компиляции.
-// Адрес этой структуры (указатель на экземпляр этой структуры) уникален для каждого типа и каждый тип однозначно знает где она находится с момента своей компиляции.
-	struct TypeInfo 
-	{	ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeInfo);
-
-		const CLSID&				TypeId_;
-		const FixedTerm&			TypeTerm_;
-		const strview_t&			TypeDescriptionInit_;
-		//NOTE	Какое либо поле (и лучше это) обязано быть mutable. Тогда компилятор эту constexpr структуру укладывает в секцию data (rw),
-		//		а не в rodata. Т.е. структура вся constexpr, но можно что-то переписывать. 
-		//		(Если структура в rodata, то при попытке переписать крах)
-		//		Это нам важно для наших наследников - TypeDescriptor... Мы их в рантайме правильной vtbl инициализируем.
-		mutable ClassOpt<String>	TypeDescription_{ nullptr };
-	public:
-		constexpr TypeInfo(const CLSID& type_id_, const FixedTerm& type_term_, const strview_t& type_description_)
-													: TypeId_(type_id_), TypeTerm_(type_term_), TypeDescriptionInit_(type_description_)
-		{}	
-	public:
-		static void Init(const TypeInfo& type_) {
-			//множественная инициализаци дескриптора не катострофична, но все равно свидетельствует о какой-то ошибке
-			assert(!type_.TypeDescription_);
-			if (!type_.TypeDescription_)
-				type_.TypeDescription_ = String(type_.TypeDescriptionInit_);
-		}
-		static void Term(const TypeInfo& type_) {
-			type_.TypeDescription_ = nullptr;
-		}
-	};
+		//TODO	оно не Mutable, а Memb.  Stable/Mutable делается конкретный дескриптор
+		using DispMutableSizeFn		= size_t(ExValueBase&);
+		using DispMutableFindFn		= dispid_t(ExValueBase&, const strview_t&);
+		// Для методов экземпляра обязателен параметр экземпляра объекта относительно которого вызываются
+		// (реализация дисп-интерфейса в том числе позволяет привязывать статические методы к классу тихо "глотая" инстанс экземпляра. см.ext)
+		using DispMembPropFn		= const DispInfoMembProp* (ExValueBase&, dispid_t);
+		using DispMembMethFn		= const DispInfoMembMeth* (ExValueBase&, dispid_t);
+		using DispMembMethParaDefFn = bool(ExValueBase&, dispid_t meth_, dispid_t para_, IVariable* out_def_value_);
 
 
-	//NOTE	По историческим причинам часть классов, структур, методов и т.п. имеют приставку Ext.
-	//		Ранее возможность создавать свои классы для 1С было неким "расширением"
-
-	struct TypeDescriptor;
-	struct TypeDescriptorValue;
-	struct TypeDescriptorValueSimple;
-	struct TypeDescriptorValueObject;
+		using ExInstanceBaseForDeleter = ExEntityInstance;
+		using ExInstanceDeleterFn = void(ExInstanceBaseForDeleter&);
 
 
-	//esbhlp
-	//INFO	Регистрировать типы в платформе нужно только если Вы хотите создавать их в коде 1С с помощью Новый(Тип(...))
-	//		Но это достаточно не удобно т.к. 1С пытается проверять имя типа и ее приходится обманывать
-	//		Также при таком создании неудобно ограниченно передавать параметры конструктору.
-	//		На мой взгляд удобнее сделать к своему типу XXXX метод CreateXXX в интерфейсе есб-addin-object.
-	//		Для такого создания регистрировать ничего не надо, и, от-регистрировать тоже. И с параметрами проще.
-	//		Поэтому эти методы "на любителя" Вы можете вызывать сами. Есб их не использует.
-	bool ExtRegisterType(const TypeDescriptorValue& descriptor_, IClassFactory& factory_);
-	bool ExtRevokeType(const TypeDescriptorValue& descriptor_);
+		struct DispInfoCtor {
+			size_t					param_count_;
+			ExInstanceCreatorFn*	func_;
+		};
 
 
-	//INFO	Базовый класс для создаваемых в есб 1С-значений. Инициализация правильной vtbl в esbhlp
-	//		Описание как имплементировать ту или иную функциональность задается структурами TypeDescriptor...
-	//		Ввиду того, что vtbl задается не компилятором класс объявлен не-копируемым (а то еще и операторы копирования\перемещения делать надо)
-	//		Копируемость ему не нужна т.к. он создается единожды, сам себя уничтожает, а данными мы оперируем через указатель на IValue.
-	struct __declspec(novtable) ExtValueBase : public IValue {
-		//hidden uintptr_t vft_
-		ESB_DECLARE_NOCOPYMOVE(ExtValueBase);
-	protected:
-		const TypeDescriptor*		m_type = nullptr;
-		refcounter_t				m_refs = 0;
-		// implementation
-	};
-	
+		using ExValueToBooleanFn = Boolean(ExValueBase&);
+		using ExValueToNumericFn = Numeric(ExValueBase&);
+		using ExValueToStringFn = String(ExValueBase&);
+		using ExValueToDateTimeFn = DateTime(ExValueBase&);
+		using ExValueIsEqualDataFn = bool(ExValueBase&,ExValueBase&);
+		using ExValueDataHashFn = ihash_t(ExValueBase&);
 
-	using ExtValueSimpleBase = ExtValueBase;
+		struct TypeInfoFor_Instance {
+			ExInstanceDeleterFn* InstanceDeleter_{ nullptr };
+		};
 
-	template<class ExtDataT>
-	struct ExtValueSimple : public ExtValueSimpleBase {
-		//Указываем что выравнивание поля для ExtDataT должно быть точно таким же, как если бы мы не паковали его в структуру
-		alignas(ExtDataT) 
-		ExtDataT ContainedValueData_;
-		
-	};
-
-
-	struct ExtValueObjectBase : public ExtValueBase, public IObject {
-		ESB_DECLARE_NOCOPYMOVE(ExtValueObjectBase);
-		// implementation
-		template<class ExtDataT>
-		inline ExtDataT& GetContainedData();
-		template<class ExtDataT>
-		inline const ExtDataT& GetContainedData() const;
-	};
-	template<class ExtDataT>
-	struct ExtValueObject : public ExtValueObjectBase {
-		//Указываем что выравнивание поля для ExtDataT должно быть точно таким же, как если бы мы не паковали его в структуру
-		alignas(ExtDataT) 
-		ExtDataT ContainedValueData_;
-	};
-
-
-	template<class ExtDataT>
-	inline ExtDataT& ExtValueObjectBase::GetContainedData() {
-		return static_cast<ExtValueObject<ExtDataT>*>(this)->ContainedValueData_;
-	}
-	template<class ExtDataT>
-	inline const ExtDataT& ExtValueObjectBase::GetContainedData() const {
-		return static_cast<const ExtValueObject<ExtDataT>*>(this)->ContainedValueData_;
-	}
-
-
-	template<class ExtValueT>
-	struct ext_value_contained_data;
-	template<class ExtDataT>
-	struct ext_value_contained_data<ExtValueSimple<ExtDataT>> {
-		using type = ExtDataT;
-	};
-	template<class ExtDataT>
-	struct ext_value_contained_data<ExtValueObject<ExtDataT>> {
-		using type = ExtDataT;
-	};
-	template<class ExtValueT>
-	using ext_value_contained_data_t = typename ext_value_contained_data<ExtValueT>::type;
-
-
-	using ExtAllocatorAllocFn = void* (size_t);
-	using ExtAllocatorFreeFn = void(void*);
-
-	
-	//NOTE	заглушка. настоящий интерфейс ставится в esbhlp
-	class __declspec(novtable) TypeDescriptorInterfaceImpl : public IType {
-		STDMETHOD(QueryInterface)(REFIID, void**) throw() override	{ return E_NOTIMPL; }
-		STDMETHOD_(ULONG, AddRef)() throw() override				{ return 1; }
-		STDMETHOD_(ULONG, Release)() throw() override				{ return 1; }
-	};
-
-	//Static
-	//Fixed
-	//Dynamic
-	//Volatile
-	//Stable
-	//Unstable
-	//Mutable
-
-	// Диспатч-интерфейс реализуется двумя массивами (для Prop и Meth) и тремя методами для каждого массива - Size, Find, Item (Prop или Meth)
-	// Интерфейс может быть стабильным - т.е. в рантайме ничего не меняется (т.е. каждому из методов не нужен параметр экземпляра)
-	// и динамическим - в рантайме может измениться кол-во свойств/методов/их-имена/реализация - тогда нужена ссылка на экземпляр в параметрах
-	// (интерфейс - статичный/динамический, методы - статические/экземпляра)
-	using DispStableSizeFn		= size_t(void);
-	using DispStableFindFn		= dispid_t(const strview_t&);
-	// Для статических методов не нужен экземпляр объекта относительно которого они вызываются
-	using DispStatPropFn		= const DispInfoStatProp*(dispid_t);
-	using DispStatMethFn		= const DispInfoStatMeth*(dispid_t);
-	using DispStatMethParaDefFn = bool(dispid_t meth_, dispid_t para_, IVariable* out_def_value_);
-
-	using DispMutableSizeFn		= size_t(const ExtValueObjectBase&);
-	using DispMutableFindFn		= dispid_t(const ExtValueObjectBase&, const strview_t&);
-	// Для методов экземпляра обязателен параметр экземпляра объекта относительно которого вызываются
-	// (реализация дисп-интерфейса в том числе позволяет привязывать статические методы к классу тихо "глотая" инстанс экземпляра. см.ext)
-	using DispMembPropFn		= const DispInfoMembProp* (const ExtValueObjectBase&, dispid_t);
-	using DispMembMethFn		= const DispInfoMembMeth* (const ExtValueObjectBase&, dispid_t);
-	using DispMembMethParaDefFn = bool(const ExtValueObjectBase&, dispid_t meth_, dispid_t para_, IVariable* out_def_value_);
-
-
-	using ExtInstanceCreatorFn = IValuePtr(const TypeDescriptorValue&, const argpack_t&);
-	using ExtInstanceDeleterFn = void(ExtValueBase&);
-	using ExtInstanceCreatorFindFn = ExtInstanceCreatorFn* (size_t);
-
-	struct DispInfoCtor {
-		size_t					param_count_;
-		ExtInstanceCreatorFn*	func_;
-	};
-
-
-	using ExtValueToBooleanFn = Boolean(const ExtValueBase&);
-	using ExtValueToNumericFn = Numeric(const ExtValueBase&);
-	using ExtValueToStringFn = String(const ExtValueBase&);
-	using ExtValueToDateTimeFn = DateTime(const ExtValueBase&);
-	using ExtValueIsEqualDataFn = bool(const ExtValueBase&, const ExtValueBase&);
-	using ExtValueDataHashFn = ihash_t(const ExtValueBase&);
-
-
-	//INFO	Фактически "дескриптор" - это некий аналог vtbl и typeinfo, только своими руками.
-	//		Минусом такого решения конечно есть отсутствие поддержки компилятором. все ручками.
-	//		Плюсом намного большая гибкость. А при consteval в
-
-#define ESB_CONSTEXPR_TYPEDESCRIPTOR	constexpr
-
-
-	// совершенно пустой дескриптор для типов, которые сами знают как создаваться\удаляться\работать (делегат например) - не лучший пример..
-	struct TypeDescriptor : public TypeDescriptorInterfaceImpl, public TypeInfo {
-		ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeDescriptor);
-
-		ESB_CONSTEXPR_TYPEDESCRIPTOR
-		TypeDescriptor(const CLSID & id_, const FixedTerm & term_, const strview_t& description_)
-			: TypeDescriptorInterfaceImpl(), TypeInfo(id_, term_, description_)
-		{}
-	protected:
-		// имплементация IType в esbhlp расчитана на некоторое 1С-Value. Поэтому все методы Init\Term реализованы в TypeDescriptorValue
-	};
-
-
-
-	struct TypeDescriptorValue : public TypeDescriptor 
-	{	ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeDescriptorValue);
-	private:
-		//esbhlp
-		static IType& InitDescriptorInterface(TypeDescriptorValue& typ_);
-	public:
-		ExtInstanceDeleterFn&		InstanceDeleter_;				//в данной модели делетер экземпляра обязателен! Возможна иная реализация дескриптора для синглтонов
-		ExtInstanceCreatorFindFn*	InstanceCreatorFind_ = nullptr;	//которые ссылки не считают и не удалаяются - иная ветка иерархии дескрипторов. не надо здесь делать "удобства"
-																	//в виде "а если удалятора нет, то мы синглтон и ссылки считать не будем...".. а хочется...
-
-		ExtValueToBooleanFn*		ToBoolean_		= nullptr;
-		ExtValueToNumericFn*		ToNumeric_		= nullptr;
-		ExtValueToStringFn*			ToString_		= nullptr;
-		ExtValueToDateTimeFn*		ToDateTime_		= nullptr;
-		ExtValueIsEqualDataFn*		IsEqualData_	= nullptr;
-		ExtValueDataHashFn*			DataHash_		= nullptr;
-	public:
-		ESB_CONSTEXPR_TYPEDESCRIPTOR
-		TypeDescriptorValue(const CLSID& id_, const FixedTerm& term_, const strview_t& description_, ExtInstanceDeleterFn& deleter_)
-			: TypeDescriptor(id_, term_, description_), InstanceDeleter_(deleter_)
-		{}
-	protected:
-		// собственно после вызова этого метода наш дескриптор готов работать как IType для 1С
-		// метод протектед, т.к. конкретными 1С-Value являются примитивное-валюе и объектное-валюе
-		// (см.ниже их дескрипторы) Они уже вызывают эти методы.
-		static IType& Init(TypeDescriptorValue& typ_) {
-			TypeInfo::Init(typ_);
-			return InitDescriptorInterface(typ_);
-		}
-		static void Term(TypeDescriptorValue& typ_) {
-			TypeInfo::Term(typ_);
-			// делать какой-то терм интерфейсу не нужно - там ничего не требует очистки.
-		}
-	};
-
-
-	struct TypeDescriptorValueSimple : public TypeDescriptorValue {
-		ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeDescriptorValueSimple);
-
-		ESB_CONSTEXPR_TYPEDESCRIPTOR
-		TypeDescriptorValueSimple(const CLSID& id_, const FixedTerm& term_, const strview_t& description_, ExtInstanceDeleterFn& deleter_)
-			: TypeDescriptorValue(id_, term_, description_, deleter_)
-		{}
-	public:
-		static IType& InitDescriptor(TypeDescriptorValueSimple& typ_) {
-			return TypeDescriptorValue::Init(typ_);
-		}
-	protected:
-		ExtValueSimpleBase& NewValueBaseInplace(void* pv_) const noexcept;
-	};
-
-
-	struct TypeDescriptorValueObject : public TypeDescriptorValue
-	{	ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(TypeDescriptorValueObject);
+		struct TypeInfoFor_IValue
+		{
+			using interface_t = IValue;
+			//
+			ExValueToBooleanFn*			ToBoolean_		= nullptr;
+			ExValueToNumericFn*			ToNumeric_		= nullptr;
+			ExValueToStringFn*			ToString_		= nullptr;
+			ExValueToDateTimeFn*		ToDateTime_		= nullptr;
+			ExValueIsEqualDataFn*		IsEqualData_	= nullptr;
+			ExValueDataHashFn*			DataHash_		= nullptr;
+		};
 		//
-		DispMutableSizeFn*	ObjPropCount_	= nullptr;
-		DispMutableFindFn*	ObjPropFind_	= nullptr;
-		DispMembPropFn*		ObjProp_		= nullptr;
-
-		DispMutableSizeFn*	ObjMethCount_	= nullptr;
-		DispMutableFindFn*	ObjMethFind_	= nullptr;
-		DispMembMethFn*		ObjMeth_		= nullptr;
-		// if info-bit-opt is set, but ObjMethParaDefault_==nullptr assume default Undef
-		DispMembMethParaDefFn*	ObjMethParaDefault_ = nullptr;
-
-	public:
-		ESB_CONSTEXPR_TYPEDESCRIPTOR
-		TypeDescriptorValueObject(const CLSID& id_, const FixedTerm& term_, const strview_t& description_, ExtInstanceDeleterFn& deleter_)
-			: TypeDescriptorValue(id_, term_, description_, deleter_)
-		{}
-	public:
-		static IType& InitDescriptor(TypeDescriptorValueObject& typ_) {
-			return TypeDescriptorValue::Init(typ_);
-		}
-	protected:
-		ExtValueObjectBase& NewValueBaseInplace(void* pv_) const noexcept;
-	};
+		struct TypeInfoFor_IValueSingleton : public TypeInfoFor_IValue
+		{};
+		//
+		struct TypeInfoFor_IValueInstance : public TypeInfoFor_IValue, TypeInfoFor_Instance
+		{};
 
 
-	template<class T>
-	inline constexpr bool is_type_descriptor_value = std::is_base_of_v<TypeDescriptorValueSimple, T>;
-	template<class T>
-	inline constexpr bool is_type_descriptor_object = std::is_base_of_v<TypeDescriptorValueObject, T>;
+		struct TypeInfoFor_IObject 
+		{
+			using interface_t = IObject;
+			//
+			using FnDispMutableMembSize			= size_t(ExValueBase&);
+			using FnDispMutableMembFind			= dispid_t(ExValueBase&, const string_view_t&);
+			using FnDispMutableMembProp			= const DispInfoMembProp* (ExValueBase&, dispid_t);
+			using FnDispMutableMembMeth			= const DispInfoMembMeth* (ExValueBase&, dispid_t);
+			using FnDispMutableMembParaDef		= IValuePtr(ExValueBase&, dispid_t meth_, dispid_t para_);
+			//
+			FnDispMutableMembSize*		ObjPropCount_	= nullptr;
+			FnDispMutableMembFind*		ObjPropFind_	= nullptr;
+			FnDispMutableMembProp*		ObjProp_		= nullptr;
+								 
+			FnDispMutableMembSize*		ObjMethCount_	= nullptr;
+			FnDispMutableMembFind*		ObjMethFind_	= nullptr;
+			FnDispMutableMembMeth*		ObjMeth_		= nullptr;
+			// if info-bit-opt is set, but ObjMethParaDefault_==nullptr assume default Undef
+			FnDispMutableMembParaDef*	ObjMethParDef_	= nullptr;
+		};
 
-	template<class T>
-	inline constexpr bool is_type_descriptor = (is_type_descriptor_value<T> || is_type_descriptor_object<T>);
-	template<class T>
-	concept TypeDescriptorConcept = is_type_descriptor<T>;
 
-	// дальше см. esb_ext.h
+
+		struct TypeInfoFor_IxCollectionRO
+		{
+			using interface_t = IIxCollectionRO;
+			//
+			using FnGetSize = size_t(const ExValueBase&);
+			using FnGetValue = IValuePtr(const ExValueBase& collection_, size_t index_);
+			//
+			FnGetSize*	PfnGetSize_ = nullptr;
+			FnGetValue* PfnGetValue_ = nullptr;
+		};
+		struct TypeInfoFor_IxCollectionRW : public TypeInfoFor_IxCollectionRO
+		{
+			using interface_t = IIxCollectionRW;
+			//
+			// чтобы не делать и const& и && версий примем значение byval
+			//TODO	Почему? Вроде только && нужно.. Проверить, почистить.
+			using FnSetValue = void(ExValueBase& collection_, size_t index_, IValuePtr byval_value_);
+			//
+			FnSetValue* PfnSetValue_ = nullptr;
+		};
+		struct TypeInfoFor_IxCollectionAD : public TypeInfoFor_IxCollectionRW
+		{
+			using interface_t = IIxCollection;
+			//
+			using FnResize = void(const ExValueBase& collection_, size_t new_size_);
+			using FnInsert = void(const ExValueBase& collection_, size_t ins_at_, IValuePtr byval_ins_value_);
+			using FnRemove = void(const ExValueBase& collection_, size_t remove_at_);
+			FnResize* PfnResize_ = nullptr;
+			FnInsert* PfnInsert_ = nullptr;
+			FnRemove* PfnRemove_ = nullptr;
+		};
+
+
+		struct TypeInfoFor_IEnumValues
+		{
+			using interface_t = IEnumValues;
+			//
+			using FnReset				= bool(ExValueBase&);
+			using FnGetValueAndMoveNext = IValuePtr(ExValueBase&);
+			using FnSkip				= bool(ExValueBase&, size_t c_elem_to_skip_);
+			using FnClone				= IValuePtr(ExValueBase&);
+			//
+			FnReset*				PfnReset_				= nullptr;
+			FnGetValueAndMoveNext*	PfnGetValueAndMoveNext_ = nullptr;
+			FnSkip*					PfnSkip_				= nullptr;
+			FnClone*				PfnClone_				= nullptr;
+		};
+
+
+		class IEnumeratable : public IUnknown {};
+		//
+		struct TypeInfoFor_IEnumeratable 
+		{
+			using interface_t = IEnumeratable;
+			//
+			//TODO	Нужно возвращать прямо IEnumValuesPtr
+			using FnGetEnumerator = IEntityPtr(ExValueBase&);
+			//
+			FnGetEnumerator* PfnGetEnumerator_ = nullptr;
+		};
+
+
+		template<typename... ExTypeInfoTs>
+		struct TypeInfoFor : public TypeInfo, public ExTypeInfoTs...
+		{
+			constexpr
+			TypeInfoFor(const CLSID& id_, const FixedTerm& term_, const string_view_t& description_)
+				: TypeInfo(id_, term_, description_)
+			{}
+			//hlp
+			ExValueBase& NewValueBaseInplace(void* pv_) const noexcept;
+		};
+
+		template<typename ExTypeInfoT>
+		inline constexpr bool is_typeinfo_for_instance = std::is_convertible_v<ExTypeInfoT, TypeInfoFor_Instance>;
+
+
+		template<class TypeInfoPartT>
+		using TypeInfoInterface = TypeInfoPartT::interface_t;
+
+
+		template<typename ExTypeInfoForT>
+		struct ExEntityBaseFor;
+		//
+		template<typename... ExTypeInfosTs>
+		struct ExEntityBaseFor<TypeInfoFor<ExTypeInfosTs...>>
+			: std::conditional_t<is_typeinfo_for_instance<TypeInfoFor<ExTypeInfosTs...>>, ExEntityInstance, ExEntitySingleton>, TypeInfoInterface<ExTypeInfosTs>...
+		{
+			using TypeInfoType = TypeInfoFor<ExTypeInfosTs...>;
+		};
+
+
+		//TODO	Здесь у нас проблема с определением Entity для тип-инфо у которого нет ::interface_t
+		//		Проявилась для енмератора, который не Value, а на основе своего IEnumValues
+		//		Артефакт перехода от ExValue к ExEntity
+		//TODO	Также для нюансов имлементации TypeInfo с интерфейсом нужно делать первым
+		//		Поэтому исключительно для енумератора ручками выписываем и его TypeInfo и его ExEntity
+		//		Если проявится еще - будем решать
+		using TypeInfoForEnumerator = TypeInfoFor<TypeInfoFor_IEnumValues, TypeInfoFor_Instance>;
+		//
+		template<>
+		struct ExEntityBaseFor<TypeInfoForEnumerator> : ExEntityInstance, TypeInfoFor_IEnumValues::interface_t
+		{
+			using TypeInfoType = TypeInfoForEnumerator;
+		};
+
+
+		template<typename ExDataT, typename ExTypeInfoForT>
+		struct ExEntityFor;
+		//
+		template<typename ExDataT, typename ExTypeInfoForT>
+		struct ExEntityFor	: ExEntityBaseFor< ExTypeInfoForT >
+		{
+			using ContainedDataType = ExDataT;
+			//
+			ContainedDataType		ContainedData_;
+		};
+		template<typename ExTypeInfoForT>
+		struct ExEntityFor<void, ExTypeInfoForT> : ExEntityBaseFor< ExTypeInfoForT >
+		{
+			using ContainedDataType = void;
+			//
+		};
+
+	} //_internal
+} // esb
+
+
+
+
+namespace esb {
+//
+	namespace _internal
+	{
+		// Данная структура описывает наше (1С) тип-инфо и не предназначена ни для какого использования кроме как статического создания в единственном экземпляре на этапе компиляции.
+		// Адрес этой структуры (указатель на экземпляр этой структуры) уникален для каждого типа и каждый тип однозначно знает где она находится с момента своей компиляции.
+
+
+		//INFO	Базовый класс для создаваемых в есб 1С-значений. Инициализация правильной vtbl в esbhlp
+		//		Описание как имплементировать ту или иную функциональность задается структурами TypeDescriptor...
+		//		Ввиду того, что vtbl задается не компилятором класс объявлен не-копируемым (а то еще и операторы копирования\перемещения делать надо)
+		//		Копируемость ему не нужна т.к. он создается единожды, сам себя уничтожает, а данными мы оперируем через указатель на IValue.
+
+
+		//Static
+		//Fixed
+		//Dynamic
+		//Volatile
+		//Stable
+		//Unstable
+		//Mutable
+
+		//INFO	Фактически "дескриптор" - это некий аналог vtbl и typeinfo, только своими руками.
+		//		Минусом такого решения конечно есть отсутствие поддержки компилятором. все ручками.
+		//		Плюсом намного большая гибкость. А при consteval в
+
+
+		template<class T>
+		inline constexpr bool is_type_descriptor = (std::is_base_of_v<TypeInfo, T>);
+		template<class T, typename ExTypeInfoT>
+		inline constexpr bool is_type_descriptor_for = is_type_descriptor<T> && (std::is_base_of_v<ExTypeInfoT, T>);
+		template<class T>
+		inline constexpr bool is_type_descriptor_for_object = is_type_descriptor_for<T, TypeInfoFor_IObject>;
+
+		template<class T>
+		concept TypeDescriptorConcept = is_type_descriptor<T>;
+
+		// дальше см. esb_ext.h
+	} // _internal
 }	// esb ext support
 
 
 
 namespace esb // esb addin & register support
 {
-	// Дескриптор объекта есб-компоненты. Имеет упрощенный и статический объектный интерфейс. 
-	// Instance_ статический, один и в esbhlp. Тип и фактори там же.
-	// Нужно только задать соответствующие методы диспатч-лайк интерфейса. см. esb_meta.h, esb_ext.h
-	struct AddinDescriptor : public TypeInfo
-	{	ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(AddinDescriptor);
-	public:
-		DispStableSizeFn*		ObjPropCount_	= nullptr;
-		DispStableFindFn*		ObjPropFind_	= nullptr;
-		DispStatPropFn*			ObjProp_		= nullptr;
+	namespace _internal
+	{
+		// Дескриптор объекта есб-компоненты. Имеет упрощенный и статический объектный интерфейс. 
+		// Instance_ статический, один и в esbhlp. Тип и фактори там же.
+		// Нужно только задать соответствующие методы диспатч-лайк интерфейса. см. esb_meta.h, esb_ext.h
+		struct AddinDescriptor : public TypeInfo
+		{
+			ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT_NOCTOR(AddinDescriptor);
+		public:
+			using ext_value_t = void;
 
-		DispStableSizeFn*		ObjMethCount_	= nullptr;
-		DispStableFindFn*		ObjMethFind_	= nullptr;
-		DispStatMethFn*			ObjMeth_		= nullptr;
+			DispStableSizeFn* ObjPropCount_ = nullptr;
+			DispStableFindFn* ObjPropFind_ = nullptr;
+			DispStatPropFn* ObjProp_ = nullptr;
 
-		DispStatMethParaDefFn*	ObjMethParaDefault_ = nullptr;
-	public:
-		constexpr AddinDescriptor(const CLSID& type_id_, const FixedTerm& type_term_, const strview_t& type_description_,
-									DispStableSizeFn* prop_count_, DispStableFindFn* prop_find_, DispStatPropFn* prop_item_,
-									DispStableSizeFn* meth_count_, DispStableFindFn* meth_find_, DispStatMethFn* meth_item_)
-			: TypeInfo(type_id_, type_term_, type_description_),
-			ObjPropCount_(prop_count_), ObjPropFind_(prop_find_), ObjProp_(prop_item_),
-			ObjMethCount_(meth_count_), ObjMethFind_(meth_find_), ObjMeth_(meth_item_)
-		{}
-		
-		// Для инициализации через шаблонный конструктор через описание интерфейса (interface_info_t) нужно подключать esb_meta - определено там
-		template<typename InterfaceT>
-		constexpr AddinDescriptor(std::type_identity<InterfaceT>);
-	public:
-		static const AddinDescriptor Instance_;
-	};
+			DispStableSizeFn* ObjMethCount_ = nullptr;
+			DispStableFindFn* ObjMethFind_ = nullptr;
+			DispStatMethFn* ObjMeth_ = nullptr;
 
+			DispStatMethParaDefFn* ObjMethParaDefault_ = nullptr;
+		public:
+			constexpr AddinDescriptor(const CLSID& type_id_, const FixedTerm& type_term_, const strview_t& type_description_,
+				DispStableSizeFn* prop_count_, DispStableFindFn* prop_find_, DispStatPropFn* prop_item_,
+				DispStableSizeFn* meth_count_, DispStableFindFn* meth_find_, DispStatMethFn* meth_item_)
+				: TypeInfo(type_id_, type_term_, type_description_),
+				ObjPropCount_(prop_count_), ObjPropFind_(prop_find_), ObjProp_(prop_item_),
+				ObjMethCount_(meth_count_), ObjMethFind_(meth_find_), ObjMeth_(meth_item_)
+			{}
 
-	//esbhlp
-	bool AddinObject_Register();
-	bool AddinObject_Revoke();
-	bool AddinObject_RegisterAsSCOM();
+			// Для инициализации через шаблонный конструктор через описание интерфейса (interface_info_t) нужно подключать esb_meta - определено там
+			template<typename InterfaceT>
+			constexpr AddinDescriptor(std::type_identity<InterfaceT>);
+		public:
+			static const AddinDescriptor Instance_;
+		};
+
+		inline constexpr size_t ADDIN_MODULE_PATH_MAX = 0x400;	//1C do so
+		//
+	} // _internal
 
 
 	inline HMODULE GetAddinModuleHandle() {
 		HMODULE hLibAddin = NULL;
-		[[maybe_unused]] BOOL b = GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, 
-																									(LPCWSTR)&AddinDescriptor::Instance_, &hLibAddin);
+		[[maybe_unused]] BOOL b = GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+			(LPCWSTR)&_internal::AddinDescriptor::Instance_, &hLibAddin);
 		// проверяемся просто для отладки. при загрузке проверяется NULL и в этом случае загрузка отменяется.
 		assert(b && hLibAddin);
 		return hLibAddin;
 	}
 
-	inline constexpr size_t ADDIN_MODULE_PATH_MAX = 0x400;	//1C do so
-	//
+	//esbhlp export
+	bool AddinObject_Register();
+	bool AddinObject_Revoke();
+	bool AddinObject_RegisterAsSCOM();
 }	// esb addin & register support
 
 
 
-
+//TODO	в отдельный .h его
+//TODO	сделать регистрацию в общем списке по факту включения .h
+//
 namespace esb // DelagatToMeth support
 {
 	//INFO	DelagatToMeth
@@ -2815,7 +2900,11 @@ namespace esb // DelagatToMeth support
 	extern bool ExtRegisterDelegatToMeth();
 	extern bool ExtRevokeDelegatToMeth();
 
+
 	// Сам себе и TypeDef и дескриптор
+	//TODO	esbhlp все это увидел и положил себе esbhlp.lib
+	//		в том числе и аллокатор со всеми new и delete
+	//		Нужно убирать лишнее из esb_core !
 	class TypeDefDelegatToMeth : public TypeDef {
 		friend class DelegatToMeth;
 	protected:
@@ -2952,9 +3041,6 @@ ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY
 // Поэтому, исходя из целей компилирования существующего 1С кода, самым разумным нахожу просто переиспользовать апи-провайдеров инициализированных
 // для текущей конфигурации платформы. В конечном итоге компилированный код должен работать в точности так как и не компилированный.
 // 
-
-
-
 #include "1c/1c_api_providers.h"
 
 #define	ESBAPI_DEF_PROVIDERS_H	ESB_INCLUDE_1C_MODULE(es1_api_providers.def.h)
@@ -2963,12 +3049,6 @@ namespace esb_api
 {
 
 //	//TOBE: сделать обработку синглетонов
-//#define ESBLIB_API_PROVIDER(TAG_, ...)	struct TAG_ {};
-//	struct ApiProviderTag {
-//#include ESBAPI_DEF_PROVIDERS_H
-//	};
-//	//
-//#define ESB_API_PROVIDER_TAG_T(TAG_)		esb_api::ApiProviderTag::TAG_
 
 	using dispid_t = esb::dispid_t;
 

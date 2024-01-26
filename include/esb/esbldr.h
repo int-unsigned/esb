@@ -127,7 +127,7 @@ ESB_WARNING_RESTORE()	//ESB_WARN_NO_DEFAULT_CTOR  ESB_WARN_NO_OPERATOR_ASSIGN_AN
 		constexpr auto comparator = [](const Meth& a, const WCHAR_T* b) constexpr -> int {
 			return afx_ustring::cstr_compare(a.code_, afx_ustring::CStrIteratorNoCase(b));
 		};
-		return esb::disparray_find(Meth_, name_, comparator);
+		return esb::_internal::disparray_find(Meth_, name_, comparator);
 	}
 
 

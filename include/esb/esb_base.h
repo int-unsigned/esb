@@ -475,6 +475,7 @@ namespace esb {
 		}
 		template<class RetT>
 		inline void variable_set_value(IVariable* pret_, RetT&& res_) {
+			assert(pret_);
 			return variable_set_value(*pret_, std::move(res_));
 		}
 
@@ -501,6 +502,37 @@ namespace esb {
 		IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE(strview_t)
 #undef IMPLEMENT_VARIABLE_SET_VALUE_COMPAITABLE
 #endif	//ESB_USE_AUTO_CONVERTION_VALUE_TO_CPP_TYPE
+
+
+
+		//TODO	механизмы преобазования в-из с++ типов нужно как-то формализовать и расширить
+		//		наверное нужно взять за основу модель std::swap и сделать T esb::convert_to<T>(IValuePtr&&) с подмножеством convert_to<IValuePtr>
+		template<typename T>
+		IValuePtr ex_get_value_interface(const T& value_) {
+			if constexpr (is_esb_class<T>)
+				return get_interface(value_);
+			else {
+				static_assert(is_compaitable_cpp_type<T>, "type T esb-incompaitable.");
+				using type_t = compatable_cpp_type_t<T>;
+				return get_interface(type_t{ value_ });
+			}
+		}
+		template<>
+		inline IValuePtr ex_get_value_interface<bool>(const bool& value_) {
+			return create_boolean_value(value_);
+		}
+		//
+		template<typename T>
+		T ex_get_value_from_interface(IValuePtr&& value_interface_) {
+			if constexpr (is_esb_class<T>)
+				return check_and_make<T>(std::move(value_interface_));
+			else {
+				static_assert(is_compaitable_cpp_type<T>, "type T esb-incompaitable.");
+				using esb_type_t = compatable_cpp_type_t<T>;
+				esb_type_t value = check_and_make<esb_type_t>(std::move(value_interface_));
+				return static_cast<T>(value);
+			}
+		}
 	}	//namespace esb-_internal
 
 	
@@ -662,7 +694,11 @@ namespace esb
 	protected:
 		IxInterfacePtrT m_interface; //нельзя делать const, т.к. тогда отключается operator=(&&)
 	public:
-		IxCollectionImplRO(IxInterfacePtrT&& interface_) : m_interface(std::move(interface_))
+		constexpr IxCollectionImplRO(IxInterfacePtrT&& interface_) noexcept : m_interface(std::move(interface_))
+		{}
+		//TODO	Для порядку надо всем добавить конструктор от nullptr 
+		//		(пс. коструктор IValuePtr от указателя НЕ публичен, но все как-то?! работает. странно..)
+		constexpr IxCollectionImplRO(nullptr_t) noexcept : m_interface{ nullptr }
 		{}
 		size_t	Size() const												{ return IxCollection_Size(*m_interface); }
 		value_t	GetAt(size_t index_) const									{ return make<EsbValueT>(IxCollection_GetAt(*m_interface, index_)); }
@@ -674,7 +710,7 @@ namespace esb
 	template<EsbClassConcept EsbValueT, class IxInterfacePtrT>
 	class IxCollectionImplRW : public IxCollectionImplRO<EsbValueT, IxInterfacePtrT> {
 	public:
-		IxCollectionImplRW(IxInterfacePtrT&& interface_) : IxCollectionImplRO<EsbValueT, IxInterfacePtrT>(std::move(interface_))
+		constexpr IxCollectionImplRW(IxInterfacePtrT&& interface_) noexcept : IxCollectionImplRO<EsbValueT, IxInterfacePtrT>(std::move(interface_))
 		{}
 		void SetAt(size_t index_, ConstPara<EsbValueT> value_)			{ return IxCollection_SetAt(*this->m_interface, index_, value_);}
 	};
@@ -688,7 +724,7 @@ namespace esb
 		using typename base_t::interface_t;
 		using ix_collection_t = IxCollectionRO<EsbValueT>;
 		using ix_item_t = IxCollectionItemRO<EsbValueT, interface_t>;
-		IxCollectionRO(interface_t&& interface_) : IxCollectionImplRO<EsbValueT, interface_t>(std::move(interface_))
+		constexpr IxCollectionRO(interface_t&& interface_) noexcept : IxCollectionImplRO<EsbValueT, interface_t>(std::move(interface_))
 		{}
 		const ix_item_t operator[](size_t index_) const					{ return ix_item_t{ this->m_interface, index_ }; }
 		ESB_PROPERTY_ARRAY_RO(EsbValueT, At);
@@ -699,7 +735,7 @@ namespace esb
 	class IxCollectionRWImpl : public IxCollectionImplRW<EsbValueT, IxInterfacePtrT> {
 	public:
 		using ix_item_t = IxCollectionItemRW<EsbValueT, IxInterfacePtrT>;
-		IxCollectionRWImpl(IxInterfacePtrT&& interface_) : IxCollectionImplRW<EsbValueT, IxInterfacePtrT>(std::move(interface_))
+		constexpr IxCollectionRWImpl(IxInterfacePtrT&& interface_) noexcept : IxCollectionImplRW<EsbValueT, IxInterfacePtrT>(std::move(interface_))
 		{}
 		ix_item_t operator[](size_t index_)				{ return ix_item_t{ this->m_interface, index_ }; }
 		const ix_item_t operator[](size_t index_) const	{ return ix_item_t{ this->m_interface, index_ }; }
@@ -713,7 +749,7 @@ namespace esb
 	public:
 		using typename base_t::interface_t;
 		using ix_collection_t = IxCollectionRW<EsbValueT>;
-		IxCollectionRW(interface_t&& interface_) : IxCollectionRWImpl<EsbValueT, interface_t>(std::move(interface_))
+		constexpr IxCollectionRW(interface_t&& interface_) noexcept : IxCollectionRWImpl<EsbValueT, interface_t>(std::move(interface_))
 		{}
 	};
 
@@ -723,7 +759,7 @@ namespace esb
 		using base_t = IxCollectionImplRO<EsbValueT, IIxCollectionPtr>;
 	public:
 		using typename base_t::interface_t;
-		IxCollection(interface_t&& interface_) : IxCollectionRWImpl<EsbValueT, IIxCollectionPtr>{ std::move(interface_) }
+		constexpr IxCollection(interface_t&& interface_) noexcept : IxCollectionRWImpl<EsbValueT, IIxCollectionPtr>{ std::move(interface_) }
 		{}
 		void Resize(size_t new_size_)									{ return IxCollection_Resize(*this->m_interface, new_size_);	}
 		void Insert(size_t at_index_, ConstPara<EsbValueT> value_)		{ return IxCollection_Insert(*this->m_interface, at_index_, value_);	}
@@ -1656,6 +1692,8 @@ namespace esb	// Array
 	{
 	protected:	// от нас наследуется ArrayOf<...>
 		ESB_CLASS_IMPLEMENT_OBJECT_DUAL(Array)
+		//constexpr Array(nullptr_t) : ObjectDual{ nullptr }
+		//{}
 	public:
 		// К сожалению этот шаблон умеет разворачиваться только для явно прописанных типов аргументов
 		// а для голого Numeric "не удалось вывести аргумент шаблон для ..."

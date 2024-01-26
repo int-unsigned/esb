@@ -110,13 +110,6 @@
 
 #define ESB_VER_NAME					PP_CAT(v, ESB_VER)
 
-#define ESB_ESBHLPLIB_PATH_SUFFIX		PP_STRINGIZE(ESB_VER_NAME) PP_STRINGIZE(ESB_CONFIGURATION_NAME) "/" PP_STRINGIZE(ESB_PLATFORM_NAME)
-#define ESB_ESBHLPLIB_NAME				esbhlp.lib
-#define ESB_ESBHLPLIB_PATH_NAME			ESB_ESBHLPLIB_PATH_SUFFIX "/" PP_STRINGIZE(ESB_ESBHLPLIB_NAME)
-
-//NOTE	Все что есть ..PATH.. должно иметь в конце '/'
-//		без / это как-бы имя папки, а "путь" всегда в конце с /
-#define ESB_VER_FOLDER_RELATIVE			PP_PATH(1c, ESB_VER_NAME)
 
 // мы полагаем, что в путях проекта настроен путь "include" (или иначе) в котором есть наше esb/	(и мы там лежим)
 // (или указано ESB_PATH_ROOT где мы находимся)
@@ -127,6 +120,46 @@
 #if !__has_include(   PP_STRINGIZE(PP_PATH(ESB_PATH_ROOT_FOLDER, esb_config.h))  )
 #	error esb library path not configured properly!
 #endif
+
+
+
+// нам нужно подключить соответствующую версии esbhlp.lib для линковки
+// проверимся, что наша структура папок правильна. мы ожидем, что на два шага вверх от нашего местоположения есть папка lib/
+// в которой по версиям+конфигурациям разложены наши esbhlp.lib
+// но, к сожалению, #pragma comment( lib , ... ) эти относительные пути компилятора не понимает (вернее link о них не знает)
+// линк умеет искать относительно папки проекта, куда нас подключают,		НО мы об этом проекте (папке) ничего не знаем	- не подходит
+// линк можно задать опцию где искать библиотеки (/DEFAULTLIB:, /LIBPATH:), НО нам нужно в зависимости от версии			- не подходит
+// линк можно точно указать где лежит lib и для этого будем отталкиваться от __FILE__, который нам даст строку абсолютного пути к нам.
+// прагма может контактировать пути в одну строку "a""b"->"ab"
+// а __has_include так не умеет - ему нужно сначала контактировать, а потом в строку преобразовать
+#define ESB_ESBHLPLIB_NAME				esbhlp.lib
+#define ESB_ESBHLPLIB_PATH_SUFFIX		PP_PATH(PP_CAT(ESB_VER_NAME, ESB_CONFIGURATION_NAME), ESB_PLATFORM_NAME)
+#define ESB_ESBHLPLIB_PATH_FILE			PP_PATH(ESB_ESBHLPLIB_PATH_SUFFIX, ESB_ESBHLPLIB_NAME)
+#define ESB_ESBHLPLIB_PATH_UP			../../lib
+// для тестирование наличия просто контактирую через / (для наглядности)
+// (при контактации пути чарез / нельзя вставлять пробелы - не понимает)
+#define ESB_ESBHLPLIB_PATH_FILE_TEST	ESB_PATH_ROOT_FOLDER/ESB_ESBHLPLIB_PATH_UP/ESB_ESBHLPLIB_PATH_FILE
+// а здесь просто заменяем ESB_PATH_ROOT_FOLDER на __FILE__ и получаем абсолютный путь к .lib
+// мы добавляем еще один шаг вверх "/../" т.к. __FILE__ дает не путь, а путь с нашим именем файла
+// но нормализатор путей не проверяет корректность пути - он просто убирает элементы двигаясь вверх
+#define ESB_ESBHLPLIB_PATH_FILE_LINK	__FILE__ "/../" PP_STRINGIZE(ESB_ESBHLPLIB_PATH_UP) "/" PP_STRINGIZE(ESB_ESBHLPLIB_PATH_FILE)
+#if !__has_include(   PP_STRINGIZE(ESB_ESBHLPLIB_PATH_FILE_TEST)  )
+constexpr const char* error_path = PP_STRINGIZE(ESB_ESBHLPLIB_PATH_FILE_TEST);
+#	error esb library folder has incorrect structure!
+#endif
+// линкуемся
+//TODO	Нужно завести опцию компилятора LIB_ESBHLP, а не просто _LIB т.к. _LIB это от МС и может быть разной
+#if !defined(ESB_TEST) && !defined(_LIB)
+#	pragma comment( lib , ESB_ESBHLPLIB_PATH_FILE_LINK )
+#endif // !ESB_TEST
+
+
+
+
+
+//NOTE	Все что есть ..PATH.. должно иметь в конце '/'
+//		без / это как-бы имя папки, а "путь" всегда в конце с /
+#define ESB_VER_FOLDER_RELATIVE			PP_PATH(1c, ESB_VER_NAME)
 
 #define ESB_VER_FOLDER					PP_PATH(ESB_PATH_ROOT_FOLDER, ESB_VER_FOLDER_RELATIVE)
 #define ESB_INCLUDE_1C_MODULE(FILE_)	PP_PATH_STRING( ESB_VER_FOLDER, FILE_ )
@@ -223,9 +256,18 @@
 // На основе "голого" указателя - это с++way, быстрее, но можно попасть на висящую ссылку, когда коллекция уже умерла, а итератор еще жив.
 //TOBE:	Имплементировано только для IxCollectionIterator`s.	Прочие имплементации сами по себе нуждаются в осмыслении и доработке
 #ifndef ESB_USE_OWNING_COLLECTION_ITERATOR
-#define ESB_USE_OWNING_COLLECTION_ITERATOR		0
+#	define ESB_USE_OWNING_COLLECTION_ITERATOR		0
 #endif
 
+
+// то же самое для объекта имплементирующего интерфейс енумерации коллекции
+// если определено и истинно, то в объекте-енумераторе добавляется IValuePtr на енумеруемый контейнер, что удерживает его в памяти
+// на время енумерации. Необходимость этого зависит от стратегии работы с интерфейсами вызывающей стороны - 1С.
+// Нельзя сразу, однозначно и навсегда сказать как они это делают. 
+// Владеть - надежнее, но немного теряем в эффективности. Ситуация требует изучения и отдельных тестов. Пока по-умолчанию владеем (от греха..)
+#ifndef ESB_USE_OWNING_ENUMERATOR
+#	define ESB_USE_OWNING_ENUMERATOR				1
+#endif
 
 
 //----------------------------

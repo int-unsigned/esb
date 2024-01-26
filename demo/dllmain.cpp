@@ -18,12 +18,10 @@
 
 #include "esb/esb.h"
 #include "esb/esb_ext.h"
+//
 #include "esb/1c/1c_file.h"
 #include "esb/1c/1c_data.h"
 #include "esb/1c/1c_api.h"
-
-#pragma comment( lib , "../lib/" ESB_ESBHLPLIB_PATH_NAME )
-
 
 #include <vector>
 #include <algorithm>
@@ -347,7 +345,8 @@ PseudoArrayOfNumeric SortPseudoArrayOfNumeric(PseudoArrayOfNumeric array_of_nume
 }
 
 
-PseudoArrayOfNumeric SortPseudoArrayOfNumericAsInt(PseudoArrayOfNumeric array_of_numeric_) {
+PseudoArrayOfNumeric SortPseudoArrayOfNumericAsInt(PseudoArrayOfNumeric array_of_numeric_) 
+{
 	PseudoArrayOfNumeric::ContainedDataType& vector_of_n = array_of_numeric_.GetContained().Data();
 	//Sort
 	size_t count = vector_of_n.size();
@@ -684,6 +683,8 @@ void ResultArrayShow(const Array& arr_)
 // в порядке тестирования ValueTable и связанных классов
 ValueTable CreateResultTable(const Array& results_array_) 
 {
+	//__debugbreak();
+
 	NumberQualifiers qn = NumberQualifiers::Create(Numeric(12), Numeric(2));
 	StringQualifiers qs = StringQualifiers::Create();
 	Array array_of_types = Array::Create();
@@ -817,7 +818,7 @@ struct DemoAddin {
 	}
 };
 template<>
-struct interface_info_t<DemoAddin> {
+struct esb::_internal::interface_info_t<DemoAddin> {
 	using object_t = DemoAddin;
 	//
 	// {41436F3F-36DB-46B8-AE15-53D6A5FF3536}
@@ -860,8 +861,10 @@ struct interface_info_t<DemoAddin> {
 	static constexpr auto							InterfacePropMeta_ = make_meta_interface_prop(
 		ESB_META_INTERFACE_FREE_PROP_RO(Ticks, "Тики")
 	);
+	//
+	using descriptor_t = esb::_internal::AddinDescriptor;
 };
-const AddinDescriptor AddinDescriptor::Instance_{ std::type_identity<dispinterface_static_t<interface_info_t<DemoAddin>>>{} };
+const esb::_internal::AddinDescriptor esb::_internal::AddinDescriptor::Instance_{ std::type_identity<dispinterface_static_t<interface_info_t<DemoAddin>>>{} };
 
 
 
