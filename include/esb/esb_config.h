@@ -104,7 +104,8 @@
 //#	define ESB_VER	ESB_VER_v8318
 //#	define ESB_VER	ESB_VER_v8315
 //#	define ESB_VER	ESB_VER_v8311
-#	define ESB_VER	ESB_VER_v8309
+//#	define ESB_VER	ESB_VER_v8309
+#	error ESB_VER must be defined!!!
 #endif
 
 
@@ -132,6 +133,7 @@
 // линк можно точно указать где лежит lib и для этого будем отталкиваться от __FILE__, который нам даст строку абсолютного пути к нам.
 // прагма может контактировать пути в одну строку "a""b"->"ab"
 // а __has_include так не умеет - ему нужно сначала контактировать, а потом в строку преобразовать
+#if !defined(_LIB)
 #define ESB_ESBHLPLIB_NAME				esbhlp.lib
 #define ESB_ESBHLPLIB_PATH_SUFFIX		PP_PATH(PP_CAT(ESB_VER_NAME, ESB_CONFIGURATION_NAME), ESB_PLATFORM_NAME)
 #define ESB_ESBHLPLIB_PATH_FILE			PP_PATH(ESB_ESBHLPLIB_PATH_SUFFIX, ESB_ESBHLPLIB_NAME)
@@ -149,10 +151,10 @@ constexpr const char* error_path = PP_STRINGIZE(ESB_ESBHLPLIB_PATH_FILE_TEST);
 #endif
 // линкуемся
 //TODO	Нужно завести опцию компилятора LIB_ESBHLP, а не просто _LIB т.к. _LIB это от МС и может быть разной
-#if !defined(ESB_TEST) && !defined(_LIB)
+#if !defined(ESB_TEST)
 #	pragma comment( lib , ESB_ESBHLPLIB_PATH_FILE_LINK )
 #endif // !ESB_TEST
-
+#endif // !defined(_LIB)
 
 
 

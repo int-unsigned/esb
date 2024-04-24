@@ -160,7 +160,7 @@ namespace esb
 		template<class T>
 		inline constexpr bool ext_has_type_toStringCreate = ext_has_type_to<T, String>;
 		template<class T>
-		inline constexpr bool ext_has_type_toStringConvert = requires(T & t) { to_ustring(t); };
+		inline constexpr bool ext_has_type_toStringConvert = (requires(T & t) { to_ustring(t); });
 		template<class T>
 		inline constexpr bool ext_has_type_toString = ext_has_type_toStringCreate<T> || ext_has_type_toStringConvert<T>;
 

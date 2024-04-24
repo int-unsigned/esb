@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.32901.82
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "esb_proj_template_dialog", "esb_proj_template_dialog.csproj", "{AF9DB9B5-BA38-4DB3-8F65-0570057E1C28}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AF9DB9B5-BA38-4DB3-8F65-0570057E1C28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF9DB9B5-BA38-4DB3-8F65-0570057E1C28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF9DB9B5-BA38-4DB3-8F65-0570057E1C28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF9DB9B5-BA38-4DB3-8F65-0570057E1C28}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D69081FB-8234-49B8-AAA8-7E7EBF60BCB4}
+	EndGlobalSection
+EndGlobal

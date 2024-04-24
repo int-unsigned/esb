@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProjectSchemaDefinitions xmlns="http://schemas.microsoft.com/build/2009/properties"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+      xmlns:sys="clr-namespace:System;assembly=mscorlib">
+	<ItemType Name="OneEsModuleItem" DisplayName="1С модуль (ItemType)" />
+	<FileExtension Name="*.bsl" ContentType="OneEsModuleContent" />
+	<ContentType Name="OneEsModuleContent" DisplayName="1С модуль (ContentType)" ItemType="OneEsModuleItem" />
+</ProjectSchemaDefinitions>

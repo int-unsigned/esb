@@ -38,11 +38,13 @@ struct EnumIdsFor<DatabaseCopiesUse> {
 enum _ids_enum : dispix_t {Auto, UseCopiesOnly, PreferUseCopies, DontUseCopies};
 static constexpr dispix_t _ids_enum_count = 4;
 };
+
 template<>
 struct EnumIdsFor<RequiredDataRelevance> {
 enum _ids_enum : dispix_t {Auto, Relevant, Any};
 static constexpr dispix_t _ids_enum_count = 3;
 };
+
 template<>
 struct MethIdsFor<StandardBeginningDate> {
 // No Disp Methods.

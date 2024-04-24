@@ -1,0 +1,125 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+	<PropertyGroup>
+		<DEV_PATH>$(MSBuildProjectDirectory)</DEV_PATH>
+		<DEV_1C_OUT>$(OutDir)</DEV_1C_OUT>
+		<DEV_1C_OUT_SUFFIX>.s_update.log</DEV_1C_OUT_SUFFIX>
+	</PropertyGroup>
+
+	
+	<UsingTask TaskName="DoOneEsReadLog" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.v4.0.dll">
+		<ParameterGroup>
+			<InputFilename ParameterType="System.String" Required="true" Output="false"/>
+			<OutputLogText ParameterType="System.String" Required="false" Output="true"/>
+		</ParameterGroup>
+		<Task>
+		  <Reference Include="System.Core" />
+		  <Using Namespace="System" />
+		  <Using Namespace="System.IO" />
+		  <Using Namespace="System.Text" />
+		  <Code Type="Fragment" Language="cs">
+			<![CDATA[
+		          OutputLogText = File.ReadAllText(InputFilename, Encoding.GetEncoding(1251)).Replace(Environment.NewLine, " ");
+			]]>
+		  </Code>
+		</Task>
+	</UsingTask>
+	
+	
+	<Target Name="OneEsClean" AfterTargets="Clean">
+		<ItemGroup>
+			<OneEsConfigLogFilesToDelete Include="$(OutDir)\**\*$(DEV_1C_OUT_SUFFIX)"/>
+		</ItemGroup>
+		<Message Text="Удаляем 1C-config-log: @(OneEsConfigLogFilesToDelete)"/>
+        <Delete Files="@(OneEsConfigLogFilesToDelete)"/>
+	</Target>
+
+
+	
+	<!-- 
+		Target OneEsConfig, заведующий обновлением конфигурации 1С
+		состоит из двух под-таргетов выбираемых по условию наличия пути до 1С
+		(см.ниже)
+		TODO	Все это нужно писать по-человечески на с# в EsbStudio
+	-->
+	<!-- Таргет, который информирует что пути к 1С нет и конфигурация не обновляется -->
+	<Target Name="_OneEsConfigSkip" Condition="'$(ESB_1C_PATH)' == ''"
+				Inputs="%(OneEsModuleItem.FullPath)" Outputs="$(DEV_1C_OUT)\%(OneEsModuleItem.Identity)$(DEV_1C_OUT_SUFFIX)">
+		<Message Importance="high" Text="Обновление конфигурации 1С. Для выбранной конфигурации решения ($(Configuration)|$(Platform)) путь к исполняемому файлу 1С не указан. Обновление модуля 1С '%(OneEsModuleItem.Identity)' пропущено."/>
+	</Target>
+
+	<!-- Собственно таргет, который обновляет конфигурацию 1С, если путь к 1С есть-->
+	<Target Name="_OneEsConfigMake" Condition="'$(ESB_1C_PATH)' != ''"
+					Inputs="%(OneEsModuleItem.FullPath)" Outputs="$(DEV_1C_OUT)\%(OneEsModuleItem.Identity)$(DEV_1C_OUT_SUFFIX)">
+		
+		<Message Importance="High" Text="Вызываем 1С /LoadConfigFromFiles для: %(OneEsModuleItem.FullPath)" />
+		<PropertyGroup>
+			<DEV_1C_CD_PATH>$(DEV_PATH)\1s</DEV_1C_CD_PATH>
+			<DEV_1C_CFG_PATH>$(DEV_PATH)\1s_files</DEV_1C_CFG_PATH>
+			<DEV_1C_CFG_FILE_BSL>%(OneEsModuleItem.FullPath)</DEV_1C_CFG_FILE_BSL>
+			<!-- Должно быть идентично Outputs="$(DEV_1C_OUT)\%(OneEsModuleItem.Identity)$(DEV_1C_OUT_SUFFIX)" -->
+			<DEV_1S_LOG_FILE>$(DEV_1C_OUT)\%(OneEsModuleItem.Identity)$(DEV_1C_OUT_SUFFIX)</DEV_1S_LOG_FILE>
+			<DEV_1S_LOG_DIR>$([System.IO.Directory]::GetParent($(DEV_1S_LOG_FILE)))</DEV_1S_LOG_DIR>
+			<OneEsResultOk></OneEsResultOk>
+		</PropertyGroup>
+
+		<MakeDir Directories="$(DEV_1S_LOG_DIR)" Condition="!Exists('$(DEV_1S_LOG_DIR)')" />
+				
+		<Exec 	ContinueOnError="ErrorAndContinue"
+				Command="%22$(ESB_1C_PATH)\1cv8.exe%22 DESIGNER /F%22$(DEV_1C_CD_PATH)%22 /DisableStartupMessages /DisableStartupDialogs /LoadConfigFromFiles %22$(DEV_1C_CFG_PATH)%22 -files %22$(DEV_1C_CFG_FILE_BSL)%22 /UpdateDBCfg /Out %22$(DEV_1S_LOG_FILE)%22"
+				>
+				<Output TaskParameter="ExitCode" PropertyName="OneEsResultCode"/>
+		 </Exec>
+
+		<WriteLinesToFile
+			File="$(TLogLocation)\sconfig.read.1.tlog"
+			Lines="^%(OneEsModuleItem.FullPath)" 
+		/>
+				
+		<DoOneEsReadLog Condition="Exists('$(DEV_1S_LOG_FILE)')" InputFilename="$(DEV_1S_LOG_FILE)">
+			<Output TaskParameter="OutputLogText" PropertyName="DEV_1C_LOG_CONTENT"/>
+		</DoOneEsReadLog>
+		<PropertyGroup Condition="!Exists('$(DEV_1S_LOG_FILE)')">
+			<DEV_1C_LOG_CONTENT>*** Файл ответа 1С '$(DEV_1S_LOG_FILE)' отсутствует *** </DEV_1C_LOG_CONTENT>
+		</PropertyGroup>
+				
+		<Message Importance="high" Text="Результат вызова команды: $(OneEsResultCode)" Condition="'$(OneEsResultCode)' != '0'"/>
+		<Message Importance="high" Text="Ответ 1С: $(DEV_1C_LOG_CONTENT)"/>
+
+		<!-- Если произошла ошибка обновление конфигурации, но нужно удалить лог, а иначи Студия считает что все Ок и выходной файл норм. -->
+		<!-- При каких-то ошибках может быть, что 1С вернула 0, но лог пустой - это тоже ошибка (TODO ?? Когда и где ??) -->
+		<PropertyGroup>
+			<OneEsResultOk Condition="'$(OneEsResultCode)' == '0'">true</OneEsResultOk>
+			<OneEsResultOk Condition="'$(OneEsResultCode)' != '0'">false</OneEsResultOk>
+			<OneEsResultOk Condition="'$(DEV_1C_LOG_CONTENT)' == ''">false</OneEsResultOk>
+		</PropertyGroup>
+		
+		<!-- TODO По неясной причине удаление собственно файла не срабатывает. Поэтому удаляем всю папку -->
+		<RemoveDir Directories="$(DEV_1S_LOG_DIR)" Condition="'$(OneEsResultOk)' != 'true'" />
+	</Target>
+
+	
+	<!-- Запускаем обновление 1С перед с++ линковкой. На будущее. Рассчитываем что будем проверять синтаксис. 
+			Если для выбранной конфигурации путь к 1С не настроен - просто информируем об этом
+	-->
+	<Target Name="OneEsConfig" BeforeTargets="Link" DependsOnTargets="_OneEsConfigSkip;_OneEsConfigMake"
+					Inputs="%(OneEsModuleItem.FullPath)" Outputs="$(DEV_1C_OUT)\%(OneEsModuleItem.Identity)$(DEV_1C_OUT_SUFFIX)">		
+		<!--	Вот так хитро делается в bsbuild ветвление 
+				Target _OneEsConfigSkip выполнится если пути к 1С нет
+				а Target _OneEsConfigMake наоборот выполнится если поть к 1С есть
+				а этот Target зависит от них обоих (выполнится только один)
+			https://stackoverflow.com/questions/30904741/msbuild-how-to-conditionally-use-one-of-two-targets-with-same-name  
+				а собственно здесь в нем самом ничего делать не надо
+		-->
+	</Target>
+
+	
+	<ItemGroup>
+		<PropertyPageSchema Include="$(MSBuildThisFileDirectory)\_esb_1s_property_page_schema.xml" />
+		<AvailableItemName Include="OneEsModuleItem">
+			<Targets>OneEsConfig</Targets>
+		</AvailableItemName>
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,102 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Rule xmlns="http://schemas.microsoft.com/build/2009/properties" 
+	Name="EsbSettingsPage" 
+	PageTemplate="generic" 
+	DisplayName="Настройки ЕСБ" 
+	Description="Настройки Есб для проекта 1С-есб-компоненты"
+	Order="8">
+    <Rule.Categories>
+      <Category Name="EsbSettingsPageMain"	DisplayName="1.Основные"		Description="Основные настройки поекта есб-компоненты"/>
+      <Category Name="EsbSettingsPageEsb"	DisplayName="2.Настройки Есб"	Description="Настройки Есб для поекта есб-компоненты"/>
+	  <Category Name="EsbSettingsPageCpp"	DisplayName="3.Настройки C++"	Description="Настройки C++ для поекта есб-компоненты"/>
+    </Rule.Categories>
+    <Rule.DataSource>
+		<DataSource Persistence="UserFile" Label="EsbSettings" HasConfigurationCondition="true"/>
+    </Rule.DataSource>
+
+	<StringProperty Name="ESB_VER_AUTO"
+		DisplayName="Версия Есб (авто)" 
+		Description="Версия Есб по-умолчанию $(ESB_VER_AUTO). Определяется из имени конфигурации проекта" 
+		Category="EsbSettingsPageMain" 
+		ReadOnly="true" 
+	/>
+
+	<StringProperty Name="ESB_VER"
+		DisplayName="Версия Есб"
+		Description="Используемая версия Есб $(ESB_VER). По умолчанию $(ESB_VER_AUTO). Можно переопределить для конкретной конфигурации, если Авто по каким-то присинам не подходит."
+		Category="EsbSettingsPageMain"
+		>
+		<StringProperty.DataSource>
+			<DataSource Persistence="ProjectFile" Label="EsbSettingsVer" HasConfigurationCondition="true"/>
+		</StringProperty.DataSource>
+	</StringProperty>
+
+	<StringProperty Name="ESB_PATH_AUTO" Subtype="folder" 
+		DisplayName="Путь к библиотеке Есб (авто)" 
+		Description="Корневая директория где находяится все файлы проекта Esb. По умолчанию для проекта" 
+		Category="EsbSettingsPageMain" 
+		ReadOnly="true" 
+	/>
+
+	<StringProperty Name="ESB_PATH" Subtype="folder"
+		DisplayName="Путь к библиотеке Есб"
+		Description="Корневая директория где находяится все файлы проекта Esb. По умолчанию $(ESB_PATH_AUTO). Можно переопределить для проекта."
+		Category="EsbSettingsPageMain"
+		>
+		<StringProperty.DataSource>
+			<DataSource Persistence="ProjectFile" Label="EsbSettingsCfg" HasConfigurationCondition="false"/>
+		</StringProperty.DataSource>
+	</StringProperty>
+
+	<StringProperty Name="ESB_PATH_INCLUDE" Subtype="folder" 
+		DisplayName="Путь к esb\include" 
+		Description="Папка, в которой находятся подключаемые .h файлы библиотеки Есб. Обычно esb\include." 
+		Category="EsbSettingsPageMain" 
+	/>
+
+	<StringProperty Name="ESB_1C_PATH" Subtype="folder" 
+		DisplayName="Путь к 1cv8.exe для запуска отладки" 
+		Description="Путь к 1cv8.exe для запуска отладки компоненты по F5. Именно путь - 1cv8.exe будет подставлен. Для каждой конфигурации компоненты должен быть своим, т.к. версии 1С разные." 
+		Category="EsbSettingsPageMain" 
+		>
+		<StringProperty.DataSource>
+			<DataSource Persistence="ProjectFile" Label="EsbSettingsRun" HasConfigurationCondition="true"/>
+		</StringProperty.DataSource>
+	</StringProperty>
+
+	<EnumProperty Name="ESB_USE_LANG" 
+		DisplayName="Используемые языки" 
+		Description="При программирование использовать только английский язык, только русский, или оба." 
+		Category="EsbSettingsPageEsb" 
+		>
+		<EnumProperty.DataSource>
+			<DataSource Persistence="UserFile" Label="EsbSettings" HasConfigurationCondition="false"/>
+		</EnumProperty.DataSource>
+		<EnumValue Name="EsbUseLangOnlyEn" 
+			DisplayName="Только английский" 
+			Description="При программирование использовать только английский язык." /> 
+		<EnumValue Name="EsbUseLangOnlyRu" 
+			DisplayName="Только русский" 
+			Description="При программирование использовать только русский язык." /> 
+		<EnumValue Name="EsbUseLangAll" 
+			DisplayName="Оба (английский и русский)" 
+			Description="При программирование использовать и английский и русский язык." /> 
+		<EnumValue Name="EsbUseLangNone" 
+			DisplayName="(не определять макросы)" 
+			Description="Язык программирования будет определяться настройками в коде (esb_config, esb_app_config)." /> 
+	</EnumProperty>
+
+	<EnumProperty Name="ESB_CPP_LANG" 
+		DisplayName="Стандарт языка C++ для Есб" 
+		Description="Ключ компилятора для стандарт языка C++. Есб требует и тестируется  с /std:c++20. В целях эксперимента можно попробовать выше (/std:c++23, /std:c++latest), но работоспособность не гарантируется." 
+		Category="EsbSettingsPageCpp" 
+		F1Keyword="VC.Project.VCCLCompilerTool.CppLanguageStandard"
+		>
+		<EnumProperty.DataSource>
+			<DataSource Persistence="UserFile" Label="EsbSettings" HasConfigurationCondition="false"/>
+		</EnumProperty.DataSource>
+		<EnumValue Name="stdcpp20" Switch="std:c++20" DisplayName="Стандарт ISO C++ 20" /> 
+		<EnumValue Name="stdcpplatest" Switch="std:c++latest" DisplayName="Предварительная версия — функции из последнего рабочего черновика C++" /> 
+  </EnumProperty>
+
+</Rule>

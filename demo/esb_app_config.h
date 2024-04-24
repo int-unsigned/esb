@@ -47,6 +47,6 @@
 // в глобальных переменных 1С были освобождены до освобождения самого объекта ЕСБ и сама переменная хранящая объект ЕСБ была очищена в
 // Процедуре ПриЗавершенииРаботыСистемы().
 #define ESB_USE_DETOUR				1
-#define ESB_USE_DETOUR_PATH			../../$cpp/ms-detours/detours
+#define ESB_USE_DETOUR_PATH			../../../$cpp/ms-detours/detours
 
 #endif	//ESB_APP_CONFIG_H_

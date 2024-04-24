@@ -136,6 +136,7 @@ namespace esb::_internal // esb-meta
 	using interface_contained_t = interface_contained<MetaInterfaceT, is_interface_has_object_field<MetaInterfaceT>>::type;
 
 
+#define ESB_INTERFACEDEF_T(CLASS_T_)				esb::_internal::interface_info_t<CLASS_T_>
 #define ESB_INTERFACEDEF_TERM(NAME_EN_, NAME_RU_)	ESB_T(NAME_EN_), ESB_T(NAME_RU_)
 
 #define ESB_INTERFACEDEF(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)							\
@@ -1095,6 +1096,8 @@ namespace esb::_internal // esb-meta
 	template<typename MetaInterfaceT>
 	struct dispinterface_static_t : MetaInterfaceT, dispinterface_base<MetaInterfaceT, DispInfoStatMeth, DispInfoStatProp>
 	{};
+	//
+#define ESB_DISPINTERFACE_STATIC_T(CLASS_NAME_)	esb::_internal::dispinterface_static_t< ESB_INTERFACEDEF_T(CLASS_NAME_) >
 	//---------------------------------------------------------------------------------------------------------
 
 
@@ -1243,8 +1246,30 @@ namespace esb::_internal // esb-meta
 		return true;
 	}
 
+#define ESB_DISPINTERFACE_STATIC_CHECK(CLASS_NAME_)		\
+	esb::_internal::dispinterface_check< ESB_DISPINTERFACE_STATIC_T(CLASS_NAME_) >()
 
-} //namespace esb // esb-meta
+#define ESB_ADDIN_INTERFACE_OBJECT(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)		\
+	ESB_INTERFACEDEF(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)
+
+#define ESB_ADDIN_INTERFACE_OBJECT_DONE(CLASS_T_)																	\
+		using descriptor_t = esb::_internal::AddinDescriptor;														\
+	};																												\
+	static_assert(ESB_DISPINTERFACE_STATIC_CHECK(CLASS_T_), "Invalid dispinterface for " PP_STRINGIZE(CLASS_T_) );	\
+	const esb::_internal::AddinDescriptor esb::_internal::AddinDescriptor::Instance_{ std::type_identity< ESB_DISPINTERFACE_STATIC_T(CLASS_T_) >{} }
+
+
+	// Пустой тип для объекта интефейса компоненты по-умолчанию
+	struct AddinObject {};
+
+#define ESB_ADDIN_INTERFACE(GUID_STR_, NAME_PAIR_, TEXT_)						\
+	ESB_INTERFACEDEF(esb::_internal::AddinObject, GUID_STR_, NAME_PAIR_, TEXT_)
+
+#define ESB_ADDIN_INTERFACE_DONE()												\
+	ESB_ADDIN_INTERFACE_OBJECT_DONE(esb::_internal::AddinObject)
+
+
+} //namespace esb::_internal  esb-meta
 
 
 #endif //ESB_META_H
