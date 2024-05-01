@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="EslLanguage.be0707df-1830-48f3-96d4-e281825fde9d" Version="1.1.00008.00" Language="ru-RU" Publisher="IntUnsigned" />
+        <Identity Id="EslLanguage.be0707df-1830-48f3-96d4-e281825fde9d" Version="1.1.00009.01" Language="ru-RU" Publisher="IntUnsigned" />
         <DisplayName>EsbStudio.EslLanguageService</DisplayName>
         <Description xml:space="preserve">EsbStudio Language Service for 1C-Enterprise-like language (Bsl, Esl)
-Поддержка редактирования кода на языке 1С </Description>
+</Description>
         <MoreInfo>https://github.com/int-unsigned/esb</MoreInfo>
     </Metadata>
     <Installation>

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="EsbStudio.3ae929f3-3ccd-4dc3-98ec-75a26a9323ac" Version="1.1.00008.00" Language="ru-RU" Publisher="IntUnsigned" />
+        <Identity Id="EsbStudio.3ae929f3-3ccd-4dc3-98ec-75a26a9323ac" Version="1.1.00009.01" Language="ru-RU" Publisher="IntUnsigned" />
         <DisplayName>EsbStudio</DisplayName>
         <Description xml:space="preserve">EsbStudio - C++ esb-component project template for 1C(tm)
-ЕсбСтудия - Шаблон проекта С++ компоненты для 1С(тм)</Description>
+</Description>
         <MoreInfo>https://github.com/int-unsigned/esb</MoreInfo>
     </Metadata>
     <Installation>
