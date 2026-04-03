@@ -1,0 +1,89 @@
+
+#pragma once
+
+
+//----------------------------
+//
+
+
+//TODO	D:\dev\.Pkg\or-tools\9.11\include\ortools\sat\model.h(194) : Warning 344: Unable to deduce decltype for 'T(static_cast<Model*>(nullptr))'.
+//			template <typename T>
+//  		decltype(T(static_cast<Model*>(nullptr)))* MyNew(int) ...
+//		это private метод и нам ненужен
+//		теоретически ниженаписанное должно убрать ворнинг, но не убирает..
+//
+%ignore operations_research::sat::Model::MyNew;
+#pragma SWIG nowarn=SWIGWARN_CPP11_DECLTYPE
+
+
+
+%esb_wrap_as_val(operations_research::sat::Model,   "34F74574-865A-489F-92CD-119A527A69D0", "SatModel",     "—атћодель",     "ќбъект —атћодель");
+%esb_ctor_constructor(operations_research::sat::Model::Model());
+
+
+%extend operations_research::sat::Model 
+{
+	void AddFeasibleSolutionObserver(const SolutionObserver& observer_value_)
+	{
+		std::function<void(::operations_research::sat::Model*)> 
+			observer_invocable = 
+				operations_research::sat::NewFeasibleSolutionObserver
+					(   // Ћ€мбда вызова. «ахватываем копию SolutionObserver - нам нужно чтобы объект компоненты жил в л€мбде (в std::function)
+						[observer = observer_value_](const operations_research::sat::CpSolverResponse& response_)
+						{
+							//NOTE	SolutionObserver - содержит "invocable" объект у которого есть 'void operator()(...) const'
+							//		то есть ниже мы вызываем operator()(const operations_research::sat::CpSolverResponse& response_)
+							//		который вызывает DelegatToMethConv::Invoke
+							//		который создает конвертрированием SolverResponce из const CpSolverResponse&
+							//		и вызывает DelegatToMethData::Invoke с этим SolverResponce
+							//		который хранит заданные при создании данные (структура_модели)
+							//		и с этими данными и переданным SolverResponce вызывает метод 1—:ѕроцедура Ќаблюдатель«а–ешением(структура_модели_, результ_)
+							//		ѕрофит...
+							//
+							observer.GetContained()(response_);
+						}
+					);
+		_.Add(observer_invocable);
+	}
+}
+//
+%esb_name_local("ƒобавитьЌаблюдател€«а–ешением")	operations_research::sat::Model::AddFeasibleSolutionObserver;
+
+
+//std::function<SatParameters(Model*)> NewSatParameters(const std::string& params);
+//std::function<SatParameters(Model*)> NewSatParameters(const SatParameters& parameters);
+// —огласно архитектуре —ј“ эти методы создают не собственно —атѕараметры, а функторы, которые
+// инициализируют ћодель параметрами при вызове Model::Add(-функтор-)
+// то есть как отдельные объекты в целевом (скриптовом) €зыке они малополезны
+// ƒумаю что лучше "расширить" интерфейс ћодель методами NewSatParameters и NewSatParametersFromString
+//	%esb_name_local("—оздать‘унктор—атѕараметры")			operations_research::sat::NewSatParameters(operations_research::sat::SatParameters const &);
+//	%rename(NewSatParametersFromString)						operations_research::sat::NewSatParameters(std::string const &);
+//	%esb_name_local("—оздать‘унктор—атѕараметры»з—троки")	operations_research::sat::NewSatParameters(std::string const &);
+//игнорируем по имени - оба метода.
+%ignore operations_research::sat::NewSatParameters;
+//
+%extend operations_research::sat::Model 
+{
+	void AddParameters(const ModelParameters& parameters_)
+	{
+		_.Add
+		(
+			operations_research::sat::NewSatParameters( convert_to_arg<const operations_research::sat::SatParameters&>(parameters_) )
+		);
+	}
+	void AddParametersFromString(const String& parameters_string_)
+	{
+		_.Add
+		(
+			operations_research::sat::NewSatParameters(convert_to_arg<std::string>(parameters_string_))
+		);
+	}
+} // end %extend operations_research::sat::Model 
+//
+%esb_name_local("ƒобавитьѕараметры")     		operations_research::sat::Model::AddParameters;
+%esb_name_local("ƒобавитьѕараметры»з—троки")	operations_research::sat::Model::AddParametersFromString;
+
+
+//----------------------------
+%include "ortools/sat/model.h"
+//----------------------------

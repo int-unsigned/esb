@@ -6,10 +6,13 @@
 #define PP_EXPAND(X_)			X_
 
 
-// для макросов, которые угловые скобки не понимают
+// для макросов, которые угловые скобки не понимают (define ESB_ONEOF(...)		OneOf<PP_EXPAND_LATER(__VA_ARGS__)>)
 #define PP_EMPTY()
-#define PP_EXPAND_LATER(...)		__VA_ARGS__ PP_EMPTY()
+#define PP_EXPAND_LATER(...)	__VA_ARGS__ PP_EMPTY()
 
+// для передачи аргумента с запятыми внутри в скобках '()'. нр. '(ExArrayOnVectorOf<int, Numeric>)'
+// использование без скобок: PP_EXTRACT ARGUMENT_IN_BRACKETS_
+#define PP_EXTRACT(...)			__VA_ARGS__
 
 #define PP_CAT(A_, B_)			PP_CAT_IMPL(A_,B_)
 #define PP_CAT_IMPL(A_, B_)		A_##B_

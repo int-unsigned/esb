@@ -14,6 +14,7 @@
 #include <cassert>
 
 #include "esb_core.h"
+#include "esb_traits.h"
 #include "esb_meta.h"
 #include "esb/afx/afx_tuple.h"
 
@@ -33,7 +34,7 @@ namespace esb
 		//		собственно описателями этих типов будут наследники этих структур. строго по одному классу-дескриптору на каждый тип.
 		//		Этим классом-дескриптором (наследником от ...) мы специализируем ExtTypeDef и он создает инстанс дескриптора.
 		template<TypeDescriptorConcept ExtTypeDescriptorT>
-		struct ExtTypeDef : public TypeDef 
+		struct ExtTypeDef : public TypeDef
 		{
 			using descriptor_t = ExtTypeDescriptorT;
 			using ext_value_t = typename descriptor_t::ext_value_t;
@@ -72,46 +73,9 @@ namespace esb
 		// и-в-третьих Вы можете непосредственно в своей структуре объявить метод конвертера ToBoolean, ToNumeric, ToString, ToDate
 		//
 
-#define ESB_CONTAINED_DATA_ACCESSOR_NAME			Data
-
-#define ESB_DECLARE_CONTAINED_DATA_RO(DATA_NAME_)									\
-	const auto&	ESB_CONTAINED_DATA_ACCESSOR_NAME() const	{ return DATA_NAME_; }
-
-#define ESB_DECLARE_CONTAINED_DATA_RW(DATA_NAME_)									\
-	ESB_DECLARE_CONTAINED_DATA_RO(DATA_NAME_)										\
-	auto& ESB_CONTAINED_DATA_ACCESSOR_NAME()				{ return DATA_NAME_; }	
-
-
-		template<class T>
-		constexpr bool is_contained_has_Data = (requires(T* v) { v->ESB_CONTAINED_DATA_ACCESSOR_NAME(); });
-
-		template<bool, typename ContainedT>
-		struct contained_data_accessor_const {
-			using type	= std::remove_reference_t< decltype(std::declval<const ContainedT>().ESB_CONTAINED_DATA_ACCESSOR_NAME()) >;
-		};
-		template<typename ContainedT>
-		struct contained_data_accessor_const<false, ContainedT> {
-			using type = void;
-		};
-		template<typename ContainedT>
-		using contained_data_accessor_const_t = contained_data_accessor_const<is_contained_has_Data<ContainedT>, ContainedT>::type;
-		//
-		template<bool, typename ContainedT>
-		struct contained_data_accessor {
-			using type = std::remove_reference_t< decltype(std::declval<ContainedT>().ESB_CONTAINED_DATA_ACCESSOR_NAME()) >;
-		};
-		template<typename ContainedT>
-		struct contained_data_accessor<false, ContainedT> {
-			using type = void;
-		};
-		template<typename ContainedT>
-		using contained_data_accessor_t = contained_data_accessor<is_contained_has_Data<ContainedT>, ContainedT>::type;
-
-
-
 
 		//TODO	Весь "механизм" авто-определеления iterable/indexable/etc.. опирается либбо на присутствие в самом классе соответствующих методов
-		//		либо на то, что у класса есть "магический" .ESB_CONTAINED_DATA_ACCESSOR_NAME().
+		//		либо на то, что у класса есть "магический" .ESB_CONTAINED_DATA().
 		//		Нужен третий, промежуточный и основной вариснт, когда в interface_info_t определены нужные методы
 		//		как сделано для disp-интерфейса.
 		//		ТО ЕСТЬ. Индексируемяй - это тот, у которого в интерфейсе есть "методы индексации", и ссылаться они должны на что-то в объекте
@@ -128,164 +92,40 @@ namespace esb
 		inline constexpr bool	is_interface_describe_object = is_interface_has_meth_meta<InterfaceT> || is_interface_has_prop_meta<InterfaceT>;
 		//
 		template<typename InterfaceT>
-		inline constexpr bool	is_interface_describe_indexable_rw	=	is_contained_has_SetValue< interface_contained_t<InterfaceT>> ||
-																		is_contained_indexable_w< interface_contained_t<InterfaceT>>;
+		inline constexpr bool	is_interface_describe_indexable_rw = is_contained_has_SetValue< interface_contained_t<InterfaceT>> ||
+			is_contained_indexable_w< interface_contained_t<InterfaceT>>;
 		//
 		template<typename InterfaceT>	//!is_interface_describe_indexable_rw - ВАЖНО, т.к. должен быть либо ..RW либо ..RO !
-		inline constexpr bool	is_interface_describe_indexable_ro	=	(	is_contained_has_GetValue<interface_contained_t<InterfaceT>> || 
-																			is_contained_indexable_r<interface_contained_t<InterfaceT>>
-																		) &&
-																		!is_interface_describe_indexable_rw<InterfaceT>;
+		inline constexpr bool	is_interface_describe_indexable_ro = (is_contained_has_GetValue<interface_contained_t<InterfaceT>> ||
+			is_contained_indexable_r<interface_contained_t<InterfaceT>>
+			) &&
+			!is_interface_describe_indexable_rw<InterfaceT>;
 		//
 		template<typename InterfaceT>
-		inline constexpr bool	is_interface_describe_iterable		=	is_contained_has_GetEnumerator<interface_contained_t<InterfaceT>> || 
-																		is_contained_iterable<interface_contained_t<InterfaceT>>;
+		inline constexpr bool	is_interface_describe_iterable = is_contained_has_GetEnumerator<interface_contained_t<InterfaceT>> ||
+			is_contained_iterable<interface_contained_t<InterfaceT>>;
 
 
 
-
-
-		// Value Conversion
-		//////////////////////////////////////////////////////////////////////////////
-		//
-		template<class T, class TypeTo>
-		inline constexpr bool ext_has_type_to = (std::is_constructible_v<TypeTo, T >);
-
-		template<class T>
-		inline constexpr bool ext_has_type_toBoolean = ext_has_type_to<T, Boolean>;
-		template<class T>
-		inline constexpr bool ext_has_type_toNumeric = ext_has_type_to<T, Numeric>;
-		template<class T>
-		inline constexpr bool ext_has_type_toDate = ext_has_type_to<T, DateTime>;
-		template<class T>
-		inline constexpr bool ext_has_type_toStringCreate = ext_has_type_to<T, String>;
-		template<class T>
-		inline constexpr bool ext_has_type_toStringConvert = (requires(T & t) { to_ustring(t); });
-		template<class T>
-		inline constexpr bool ext_has_type_toString = ext_has_type_toStringCreate<T> || ext_has_type_toStringConvert<T>;
-
-
-		template<class T, class TypeTo>
-		inline constexpr bool ext_has_data_to = (is_contained_has_Data<T> && std::is_constructible_v<TypeTo, contained_data_accessor_t<T> >);
-
-		template<class T>
-		inline constexpr bool ext_has_data_toBoolean = ext_has_data_to<T, Boolean>;
-		template<class T>
-		inline constexpr bool ext_has_data_toNumeric = ext_has_data_to<T, Numeric>;
-		template<class T>
-		inline constexpr bool ext_has_data_toDate = ext_has_data_to<T, DateTime>;
-		template<class T>
-		inline constexpr bool ext_has_data_toStringCreate = ext_has_data_to<T, String>;
-		template<class T>
-		inline constexpr bool ext_has_data_toStringConvert = (is_contained_has_Data<T> && requires(T & t) { to_ustring(t.ESB_CONTAINED_DATA_ACCESSOR_NAME()); });
-		template<class T>
-		inline constexpr bool ext_has_data_toString = ext_has_data_toStringCreate<T> || ext_has_data_toStringConvert<T>;
-
-
-		template<class T>
-		inline constexpr bool  ext_has_toBoolean = ext_has_type_toBoolean<T> || has_meth_ToBoolean<T> || ext_has_data_toBoolean<T>;
-		template<class T>
-		inline constexpr bool  ext_has_toNumeric = ext_has_type_toNumeric<T> || has_meth_ToNumeric<T> || ext_has_data_toNumeric<T>;
-		template<class T>
-		inline constexpr bool  ext_has_toString = ext_has_type_toString<T> || has_meth_ToString<T> || ext_has_data_toString<T>;
-		template<class T>
-		inline constexpr bool  ext_has_toDate = ext_has_type_toDate<T> || has_meth_ToDate<T> || ext_has_data_toDate<T>;
-
-
-		// во первых мы проверяем на наличие пользовательского метода конвертации ToXXX. Таким образом пользовательский способ "перекрывает" иные возможные.
-		template<class ExtValueT>
-		Boolean ExtConvertToBoolean(ExtValueT& value_) {
-			if constexpr (has_meth_ToBoolean<ExtValueT>)
-				return value_.ESB_CONVERTER_METH_ToBoolean();
-			else if constexpr (ext_has_type_toBoolean<ExtValueT>)
-				return Boolean{ static_cast<bool>(value_) };
-			else if constexpr (ext_has_data_toBoolean<ExtValueT>)
-				return Boolean{ static_cast<bool>(value_.ESB_CONTAINED_DATA_ACCESSOR_NAME()) };	//error C2398: Элемент "1": преобразование из "RawDataT" в "bool" требует сужающего 
-			else
-				static_assert(always_false_v<ExtValueT>, "Value not convertable to Boolean any way!");
-		}
-
-		template<class ExtValueT>
-		Numeric ExtConvertToNumeric(ExtValueT& value_) {
-			if constexpr (has_meth_ToNumeric<ExtValueT>)
-				return value_.ESB_CONVERTER_METH_ToNumeric();
-			else if constexpr (ext_has_type_toNumeric<ExtValueT>)
-				return Numeric{ value_ };
-			else if constexpr (ext_has_data_toNumeric<ExtValueT>)
-				return Numeric{ value_.ESB_CONTAINED_DATA_ACCESSOR_NAME() };
-			else
-				static_assert(always_false_v<ExtValueT>, "Value not convertable to Numeric any way!");
-		}
-
-		template<class ExtValueT>
-		DateTime ExtConvertToDate(ExtValueT& value_) {
-			if constexpr (has_meth_ToDate<ExtValueT>)
-				return value_.ESB_CONVERTER_METH_ToDate();
-			else if constexpr (ext_has_type_toDate<ExtValueT>)
-				return DateTime{ value_ };
-			else if constexpr (ext_has_data_toDate<ExtValueT>)
-				return DateTime{ value_.ESB_CONTAINED_DATA_ACCESSOR_NAME() };
-			else
-				static_assert(always_false_v<ExtValueT>, "Value not convertable to DateTime any way!");
-		}
-
-		template<class ExtValueT>
-		String ExtConvertToString(ExtValueT& value_) {
-			if constexpr (has_meth_ToString<ExtValueT>)
-				return value_.ESB_CONVERTER_METH_ToString();
-			else if constexpr (ext_has_type_toStringCreate<ExtValueT>)
-				return String{ value_ };
-			else if constexpr (ext_has_type_toStringConvert<ExtValueT>)
-				return String{ to_ustring(value_) };
-			else if constexpr (ext_has_data_toStringCreate<ExtValueT>)
-				return String{ value_.ESB_CONTAINED_DATA_ACCESSOR_NAME() };
-			else if constexpr (ext_has_data_toStringConvert<ExtValueT>)
-				return String{ to_ustring(value_.ESB_CONTAINED_DATA_ACCESSOR_NAME()) };
-			else
-				static_assert(always_false_v<ExtValueT>, "Value not convertable to String any way!");
-		}
 
 
 		template<class ExtValueT>
-		struct ExtValueConverter 
+		struct ExtValueConverter
 		{
 			using value_t = ExtValueT;
 			using data_t = value_t::ContainedDataType;	// ext_value_contained_data_t<ExtValueT>;
-			static const data_t& data(ExValueBase& v_)			{ return static_cast<const value_t&>(v_).ContainedData_; }
-			static Boolean	ValueToBoolean(ExValueBase& v_)		{ return ExtConvertToBoolean(data(v_)); }
-			static Numeric	ValueToNumeric(ExValueBase& v_)		{ return ExtConvertToNumeric(data(v_)); }
-			static String	ValueToString(ExValueBase& v_)		{ return ExtConvertToString(data(v_)); }
-			static DateTime ValueToDate(ExValueBase& v_)		{ return ExtConvertToDate(data(v_)); }
+			static const data_t& data(ExValueBase& v_)		{ return static_cast<const value_t&>(v_).ContainedData_; }
+			static Boolean	ValueToBoolean(ExValueBase& v_) { return ExtConvertToBoolean(data(v_)); }
+			static Numeric	ValueToNumeric(ExValueBase& v_) { return ExtConvertToNumeric(data(v_)); }
+			static String	ValueToString(ExValueBase& v_)	{ return ExtConvertToString(data(v_)); }
+			static DateTime ValueToDate(ExValueBase& v_)	{ return ExtConvertToDate(data(v_)); }
 
-			static constexpr ExValueToBooleanFn* PfnValueToBoolean()	{ if constexpr (ext_has_toBoolean<data_t>) return ValueToBoolean; else return nullptr; }
-			static constexpr ExValueToNumericFn* PfnValueToNumeric()	{ if constexpr (ext_has_toNumeric<data_t>) return ValueToNumeric; else return nullptr; }
-			static constexpr ExValueToStringFn* PfnValueToString()		{ if constexpr (ext_has_toString<data_t>) return ValueToString; else return nullptr; }
-			static constexpr ExValueToDateTimeFn* PfnValueToDate()		{ if constexpr (ext_has_toDate<data_t>) return ValueToDate; else return nullptr; }
+			static constexpr ExValueToBooleanFn*	PfnValueToBoolean() { if constexpr (is_wrapper_interface_may_ToBoolean<data_t>)	return ValueToBoolean;	else return nullptr; }
+			static constexpr ExValueToNumericFn*	PfnValueToNumeric() { if constexpr (is_wrapper_interface_may_ToNumeric<data_t>)	return ValueToNumeric;	else return nullptr; }
+			static constexpr ExValueToStringFn*		PfnValueToString()	{ if constexpr (is_wrapper_interface_may_ToString<data_t>)	return ValueToString;	else return nullptr; }
+			static constexpr ExValueToDateTimeFn*	PfnValueToDate()	{ if constexpr (is_wrapper_interface_may_ToDate<data_t>)	return ValueToDate;		else return nullptr; }
 		};
 
-
-		inline void _test_ext_converter_() {
-			static_assert(ext_has_toBoolean<long>);
-			static_assert(ext_has_toNumeric<long>);
-			static_assert(ext_has_toString<long>);
-			static_assert(!ext_has_toDate<long>);
-
-			struct _test_long_t {
-				long m_data;
-				Numeric ToNumeric() {
-					return Numeric(m_data);
-				}
-			};
-			static_assert(has_meth_ToNumeric<_test_long_t>);
-
-			struct _test_text_t {
-				string_t m_data;
-				string_t& Data() { return m_data; }
-				const string_t& Data() const { return m_data; }
-			};
-			constexpr bool _test_text_t_to_string = ext_has_data_toString<_test_text_t>;
-			static_assert(_test_text_t_to_string, " ! ext_has_data_toString<_test_text_t> ");
-		}
 		// end Value Conversion
 		/////////////////////////////////////////////////////////////////////////////////////
 
@@ -335,21 +175,21 @@ namespace esb
 		/////////////////////////////////////////////////////////////////////////////////////////////
 		// Дескрипторы
 		ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY()
-		//
-		///////////////////////////
-		using TypeInfoTupleAll = std::tuple<TypeInfoFor_IObject, TypeInfoFor_IxCollectionRW, TypeInfoFor_IxCollectionRO, TypeInfoFor_IEnumeratable>;
+			//
+			///////////////////////////
+			using TypeInfoTupleAll = std::tuple<TypeInfoFor_IObject, TypeInfoFor_IxCollectionRW, TypeInfoFor_IxCollectionRO, TypeInfoFor_IEnumeratable>;
 		//
 		template<typename T, typename InterfaceT>
 		struct TypeInfoTupleForInterfaceFilter;
 		//
-	#define DECLARE_TYPEINFO_TUPLE_FLT(TYPEINFO_T_, PRED_)	\
+#define DECLARE_TYPEINFO_TUPLE_FLT(TYPEINFO_T_, PRED_)	\
 		template<typename InterfaceT>		struct TypeInfoTupleForInterfaceFilter<TYPEINFO_T_, InterfaceT> : std::bool_constant< PRED_<InterfaceT> > {}
 		//
-		DECLARE_TYPEINFO_TUPLE_FLT(TypeInfoFor_IObject,			is_interface_describe_object);
-		DECLARE_TYPEINFO_TUPLE_FLT(TypeInfoFor_IxCollectionRW,	is_interface_describe_indexable_rw);
-		DECLARE_TYPEINFO_TUPLE_FLT(TypeInfoFor_IxCollectionRO,	is_interface_describe_indexable_ro);
-		DECLARE_TYPEINFO_TUPLE_FLT(TypeInfoFor_IEnumeratable,	is_interface_describe_iterable);
-	#undef DECLARE_TYPEINFO_TUPLE_FLT
+		DECLARE_TYPEINFO_TUPLE_FLT(TypeInfoFor_IObject, is_interface_describe_object);
+		DECLARE_TYPEINFO_TUPLE_FLT(TypeInfoFor_IxCollectionRW, is_interface_describe_indexable_rw);
+		DECLARE_TYPEINFO_TUPLE_FLT(TypeInfoFor_IxCollectionRO, is_interface_describe_indexable_ro);
+		DECLARE_TYPEINFO_TUPLE_FLT(TypeInfoFor_IEnumeratable, is_interface_describe_iterable);
+#undef DECLARE_TYPEINFO_TUPLE_FLT
 		//
 		template<typename InterfaceT>
 		using TypeInfoTupleForInterface = afx::tuple_filter_t<TypeInfoTupleAll, TypeInfoTupleForInterfaceFilter, InterfaceT>;
@@ -361,11 +201,11 @@ namespace esb
 		template<typename ContainedT, typename... TypeInfoTs>
 		struct ex_entity_value_for<ContainedT, std::tuple<TypeInfoTs...>> {
 			using type = ExEntityFor<	ContainedT,
-										TypeInfoFor	<
-													std::conditional_t<std::is_same_v<ContainedT, void>, TypeInfoFor_IValueSingleton, TypeInfoFor_IValueInstance>,
-													TypeInfoTs...
-													>
-								>;
+				TypeInfoFor	<
+				std::conditional_t<std::is_same_v<ContainedT, void>, TypeInfoFor_IValueSingleton, TypeInfoFor_IValueInstance>,
+				TypeInfoTs...
+				>
+			>;
 		};
 		//
 		template<typename InterfaceT>
@@ -390,7 +230,7 @@ namespace esb
 		//TODO	Мы можем декларировать конструктор дескриптора constexpr, но из-за поля String TypeDescription
 		//		он не удовлетворяет требованиям constexpr из-за деструктора
 		//		Нужно сделать отдельный on_runtime_term список для деструкторов и TypeDescription делать placment-new/costom~dtor()
-	#define TYPEDESCRIPTOR_CONSTRUCT_CONSTEXPR	constexpr
+#define TYPEDESCRIPTOR_CONSTRUCT_CONSTEXPR	constexpr
 
 		template<typename InterfaceT, typename ContainedT>
 		struct TypeDescriptorImplement_IObj
@@ -400,24 +240,24 @@ namespace esb
 			using ext_value_t = ex_entity_value_for_interface_t<meta_interface_t>;
 			using disp_interface_t = dispinterface_object_t< meta_interface_t >;
 
-			static constexpr size_t						PropCount(ExValueBase&)			{ return dispinterface_impl_prop_count<disp_interface_t>(); }
+			static constexpr size_t						PropCount(ExValueBase&)								{ return dispinterface_impl_prop_count<disp_interface_t>(); }
 			static constexpr int						PropFind(ExValueBase&, const string_view_t& name_)	{ return dispinterface_impl_prop_find<disp_interface_t>(name_); }
-			static constexpr const DispInfoMembProp*	Prop(ExValueBase&, int prop_)	{ return dispinterface_impl_memb_prop<disp_interface_t>(prop_); }
+			static constexpr const DispInfoMembProp*	Prop(ExValueBase&, int prop_)						{ return dispinterface_impl_memb_prop<disp_interface_t>(prop_); }
 
-			static constexpr size_t						MethCount(ExValueBase&)			{ return dispinterface_impl_meth_count<disp_interface_t>(); }
+			static constexpr size_t						MethCount(ExValueBase&)								{ return dispinterface_impl_meth_count<disp_interface_t>(); }
 			static constexpr int						MethFind(ExValueBase&, const string_view_t& name_)	{ return dispinterface_impl_meth_find<disp_interface_t>(name_); }
-			static constexpr const DispInfoMembMeth*	Meth(ExValueBase&, int meth_)	{ return dispinterface_impl_memb_meth<disp_interface_t>(meth_); }
+			static constexpr const DispInfoMembMeth*	Meth(ExValueBase&, int meth_)						{ return dispinterface_impl_memb_meth<disp_interface_t>(meth_); }
 
 			TYPEDESCRIPTOR_CONSTRUCT_CONSTEXPR
-			static void Construct(TypeInfoFor_IObject& it)
+				static void Construct(TypeInfoFor_IObject& it)
 			{
-				it.ObjPropCount_ = PropCount;
-				it.ObjPropFind_ = PropFind;
-				it.ObjProp_ = Prop;
+				it.ObjPropCount_	= PropCount;
+				it.ObjPropFind_		= PropFind;
+				it.ObjProp_			= Prop;
 				//
-				it.ObjMethCount_ = MethCount;
-				it.ObjMethFind_ = MethFind;
-				it.ObjMeth_ = Meth;
+				it.ObjMethCount_	= MethCount;
+				it.ObjMethFind_		= MethFind;
+				it.ObjMeth_			= Meth;
 			}
 		};
 
@@ -426,11 +266,11 @@ namespace esb
 		template<typename InterfaceT, typename ContainedT>
 		struct TypeDescriptorImplement_IxRW
 		{
-			using meta_interface_t	= InterfaceT;
-			using contained_t		= ContainedT;
-			using ext_value_t		= ex_entity_value_for_interface_t<meta_interface_t>;
+			using meta_interface_t = InterfaceT;
+			using contained_t = ContainedT;
+			using ext_value_t = ex_entity_value_for_interface_t<meta_interface_t>;
 
-			static size_t		IxCollection_Size(const ExValueBase& obj_base_) {			
+			static size_t		IxCollection_Size(const ExValueBase& obj_base_) {
 				if constexpr (is_contained_has_Size<contained_t>) {
 					const contained_t& container = static_cast<const ext_value_t&>(obj_base_).ContainedData_;
 					return container.ESB_CONTAINED_IXCOLLECTION_SIZE();
@@ -438,44 +278,56 @@ namespace esb
 				else {
 					static_assert(is_contained_indexable_w<contained_t>, "ContainedData_ not indexable container.");
 					const contained_t& contained = static_cast<const ext_value_t&>(obj_base_).ContainedData_;
-					return contained.ESB_CONTAINED_DATA_ACCESSOR_NAME().size();
+					return contained.ESB_CONTAINED_DATA().size();
 				}
 			}
-			static IValuePtr	IxCollection_GetValue(const ExValueBase& obj_base_, size_t index_) {
+			static IValuePtr	IxCollection_GetValue(const ExValueBase& obj_base_const_TODO_, size_t index_)
+			{
+				//TODO	Нужно перекомпилировать esbhlp! Мы вынуждены снимать конст с ExValueBase т.к. не можем создать объект-mutable-ссылку на элемент контейнера!
+				ExValueBase& obj_base_ = const_cast<ExValueBase&>(obj_base_const_TODO_);
+				//
+				contained_t& container = static_cast<ext_value_t&>(obj_base_).ContainedData_;
+				//
 				if constexpr (is_contained_has_GetValue<contained_t>) {
-					const contained_t& container = static_cast<const ext_value_t&>(obj_base_).ContainedData_;
+					
 					return container.ESB_CONTAINED_IXCOLLECTION_GETVALUE(index_);
 				}
+				else if constexpr (is_contained_has_GetValueExt<contained_t>) {
+					
+					return container.template ESB_CONTAINED_IXCOLLECTION_GETVALUE_EXT<ext_value_t>(obj_base_, index_);
+				}
 				else {
-					static_assert(is_contained_indexable_w<contained_t>, "ContainedData_ not indexable container.");
-					const contained_t& contained = static_cast<const ext_value_t&>(obj_base_).ContainedData_;
-					if (index_ >= contained.ESB_CONTAINED_DATA_ACCESSOR_NAME().size())
+					static_assert(is_contained_indexable_w<contained_t>, "ContainedData_ not indexable container.");					
+					if (index_ >= container.ESB_CONTAINED_DATA().size())
 						ESL_THROW_ARRAY_INDEX_ERR();
-					return ex_get_value_interface(contained.ESB_CONTAINED_DATA_ACCESSOR_NAME()[index_]);
+					return convert_to_ret_for_IxCollection_GetValue<ext_value_t>(container.ESB_CONTAINED_DATA()[index_], obj_base_);
 				}
 			}
-			static void			IxCollection_SetValue(ExValueBase& obj_base_, size_t index_, IValuePtr byval_value_) {
+			static void			IxCollection_SetValue(ExValueBase& obj_base_, size_t index_, IValuePtr byval_value_) 
+			{
 				contained_t& contained = static_cast<ext_value_t&>(obj_base_).ContainedData_;
-				if constexpr (is_contained_has_SetValue<contained_t>) {
+				//				
+				if constexpr (is_contained_has_SetValue<contained_t>) {					
 					contained_t& container = static_cast<ext_value_t&>(obj_base_).ContainedData_;
 					return container.ESB_CONTAINED_IXCOLLECTION_SETVALUE(index_, std::move(byval_value_));
 				}
 				else {
 					static_assert(is_contained_indexable_w<contained_t>, "ContainedData_ not indexable container.");
 					contained_t& contained = static_cast<ext_value_t&>(obj_base_).ContainedData_;
-					if (index_ >= contained.ESB_CONTAINED_DATA_ACCESSOR_NAME().size())
+					if (index_ >= contained.ESB_CONTAINED_DATA().size())
 						ESL_THROW_ARRAY_INDEX_ERR();
 
-					using contained_container_t = contained_data_accessor_t<contained_t>;
-					using contained_container_value_t = contained_container_t::value_type;
-					contained.ESB_CONTAINED_DATA_ACCESSOR_NAME()[index_] = ex_get_value_from_interface<contained_container_value_t>(std::move(byval_value_));
+					using contained_container_t			= contained_data_accessor_t<contained_t>;
+					using contained_container_value_t	= contained_container_t::value_type;
+					//contained.ESB_CONTAINED_DATA()[index_] = ex_get_value_from_interface<contained_container_value_t>(std::move(byval_value_));
+					contained.ESB_CONTAINED_DATA()[index_] = convert_to_arg_for_IxCollection_SetValue<contained_container_value_t>(std::move(byval_value_));
 				}
 			}
 
 			TYPEDESCRIPTOR_CONSTRUCT_CONSTEXPR
-			static void Construct(TypeInfoFor_IxCollectionRW& it)
+				static void Construct(TypeInfoFor_IxCollectionRW& it)
 			{
-				it.PfnGetSize_ = IxCollection_Size;
+				it.PfnGetSize_	= IxCollection_Size;
 				it.PfnGetValue_ = IxCollection_GetValue;
 				it.PfnSetValue_ = IxCollection_SetValue;
 			}
@@ -497,27 +349,33 @@ namespace esb
 				else {
 					static_assert(is_contained_indexable_r<contained_t>, "ContainedData_ not indexable container.");
 					const contained_t& contained = static_cast<const ext_value_t&>(obj_base_).ContainedData_;
-					return contained.ESB_CONTAINED_DATA_ACCESSOR_NAME().size();
+					return contained.ESB_CONTAINED_DATA().size();
 				}
 			}
-			static IValuePtr	IxCollection_GetValue(const ExValueBase& obj_base_, size_t index_) {
-				if constexpr (is_contained_has_GetValue<contained_t>) {
-					const contained_t& container = static_cast<const ext_value_t&>(obj_base_).ContainedData_;
+			static IValuePtr	IxCollection_GetValue(const ExValueBase& obj_base_const_TODO_, size_t index_) 
+			{
+				//TODO	Нужно перекомпилировать esbhlp! Мы вынуждены снимать конст с ExValueBase т.к. не можем создать объект-mutable-ссылку на элемент контейнера!
+				ExValueBase& obj_base_ = const_cast<ExValueBase&>(obj_base_const_TODO_);
+				//
+				contained_t& container = static_cast<ext_value_t&>(obj_base_).ContainedData_;
+				//
+				if constexpr (is_contained_has_GetValue<contained_t>) 
 					return container.ESB_CONTAINED_IXCOLLECTION_GETVALUE(index_);
-				}
+				else if constexpr (is_contained_has_GetValueExt<contained_t>)
+					return container.template ESB_CONTAINED_IXCOLLECTION_GETVALUE_EXT<ext_value_t>(obj_base_, index_);
 				else {
 					static_assert(is_contained_indexable_r<contained_t>, "ContainedData_ not indexable container.");
-					const contained_t& contained = static_cast<const ext_value_t&>(obj_base_).ContainedData_;
-					if (index_ >= contained.ESB_CONTAINED_DATA_ACCESSOR_NAME().size())
+					contained_t& container = static_cast<ext_value_t&>(obj_base_).ContainedData_;
+					if (index_ >= container.ESB_CONTAINED_DATA().size())
 						ESL_THROW_ARRAY_INDEX_ERR();
-					return ex_get_value_interface(contained.ESB_CONTAINED_DATA_ACCESSOR_NAME()[index_]);
+					return convert_to_ret_for_IxCollection_GetValue<ext_value_t>(container.ESB_CONTAINED_DATA()[index_], obj_base_);
 				}
 			}
 			//
 			TYPEDESCRIPTOR_CONSTRUCT_CONSTEXPR
-			static void Construct(TypeInfoFor_IxCollectionRO& it)
+				static void Construct(TypeInfoFor_IxCollectionRO& it)
 			{
-				it.PfnGetSize_ = IxCollection_Size;
+				it.PfnGetSize_	= IxCollection_Size;
 				it.PfnGetValue_ = IxCollection_GetValue;
 			}
 
@@ -530,30 +388,80 @@ namespace esb
 		//		Для Skip нужны соответствующие итераторы (через m_end перескакивать нельзя!) 
 		//		Для Clone это вообще не здесь надо делать, а там где нас создают
 		//		Возможно и Reset нужно там же делать
+		// 
+		//TODO	Проблема. Енумератор ничего не знает о враппере в котором находится контейнер
+		//		Поэтому он "в слепую" преобразовывает значение (скажем int64_t) в объект понятный 1С
+		//		полагаясь на некоторые общие настройки конвертирования (::convert_to_ivalue_for_enum)
+		//
 		template<typename ContainerT>
-		struct ExEnumeratorForContainer
+		struct ExEnumeratorForContainerDefault
 		{
 			using container_t		= ContainerT;
 			using container_value_t = container_t::value_type;
 			container_t::const_iterator m_1st;
 			container_t::const_iterator m_end;
-	#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
+#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
 			IEntityPtr					m_container_handler;
-			ExEnumeratorForContainer(IEntityPtr&& entity_handler_, const container_t& container_)
+			ExEnumeratorForContainerDefault(IEntityPtr&& entity_handler_, const container_t& container_)
 				: m_container_handler{ std::move(entity_handler_) }, m_1st{ begin(container_) }, m_end{ end(container_) }
 			{ }
-	#else
-			ExEnumeratorForContainer(const container_t& container_)
+#else
+			ExEnumeratorForContainerDefault(const container_t& container_)
 				: m_1st{ begin(container_) }, m_end{ end(container_) }
 			{ }
-	#endif
+#endif
 			IValuePtr	GetValueAndMoveNext() {
 				if (m_1st == m_end)
 					return { nullptr };
 
+				//TODO	Нужно подумать над целесообразностью возвращать всегда только конст-значение из контейнера
+				//		Может можно и значение-ссылку если контейнер позволяет и объект-значение-ссылка есть?
 				const container_value_t& value = *m_1st;
 				++m_1st;
-				return esb::_internal::ex_get_value_interface( value );
+				return esb::_internal::convert_to_ret_for_Enumerator_GetValue(value, m_container_handler);
+			}
+			bool		Reset() {						//TODO
+				return false;
+			}
+			bool		Skip(size_t c_elem_to_skip_) {	//TODO
+				//std::advance(m_1st, c_elem_to_skip_);
+				return false;
+			}
+			IValuePtr	Clone() {						//TODO
+				return { nullptr };
+			}
+		};
+
+
+
+
+
+		template<typename ContainerWrapperTy>
+		struct ExEnumeratorForContainerWrapper
+		{
+			using container_wrapper_t	= ContainerWrapperTy;
+			//NOTE	Тип контейнера мы определяем из возвращаемого значения метода .Data()
+			using container_t			= contained_data_accessor_t<container_wrapper_t>;				// (std::vector<bool>)
+			using container_iterator_t	= std::conditional_t<std::is_const_v<container_t>, typename container_t::const_iterator, typename container_t::iterator>;
+			
+			container_wrapper_t&		m_container_wrapper_;
+			container_iterator_t		m_1st;
+			container_iterator_t		m_end;
+#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
+			IEntityPtr					m_container_handler;
+			ExEnumeratorForContainerWrapper(IEntityPtr&& entity_handler_, container_wrapper_t& container_wrapper_)
+				: m_container_handler{ std::move(entity_handler_) }, m_container_wrapper_{ container_wrapper_ }, 
+					m_1st{ begin(container_wrapper_.ESB_CONTAINED_DATA()) }, m_end{ end(container_wrapper_.ESB_CONTAINED_DATA()) }
+			{ }
+#else
+			ExEnumeratorForContainerWrapper(const container_wrapper_t& container_wrapper_)
+				: m_1st{ begin(container_) }, m_end{ end(container_) }
+			{ }
+#endif
+			IValuePtr	GetValueAndMoveNext() 
+			{
+				//NOTE	Мы здесь ничего не инкрементируем и ничего не проверяем - все это задача custom имплементации метода контейнера
+				return m_container_wrapper_.ESB_CONTAINED_GETVALUEANDMOVENEXT(m_1st, m_end, m_container_handler);
 			}
 			bool		Reset() {						//TODO
 				return false;
@@ -592,93 +500,96 @@ namespace esb
 		struct ExEntityForEnumeratorFactory
 		{
 			struct TypeDescriptorForEnumerate : public TypeDescriptorForEnumerateBase
-			{			
+			{
 				ESB_DECLARE_NOCOPYMOVE_DTORDEFAULT(TypeDescriptorForEnumerate);
 				//
-				using me_t = ExEntityForEnumeratorFactory<ExEnumeratorForContainerT>::TypeDescriptorForEnumerate;
-				using mybase_t = TypeDescriptorForEnumerateBase;
-				using contained_t = ExEnumeratorForContainerT;
-				using ext_value_t = ExEntityForEnumerator< contained_t >;
-				using allocator_t = ExtAllocator<alignof(ext_value_t)>;
-				using factory_t = ExtValueFactory<me_t>;
+				using me_t			= ExEntityForEnumeratorFactory<ExEnumeratorForContainerT>::TypeDescriptorForEnumerate;
+				using mybase_t		= TypeDescriptorForEnumerateBase;
+				using contained_t	= ExEnumeratorForContainerT;
+				using ext_value_t	= ExEntityForEnumerator< contained_t >;
+				using allocator_t	= ExtAllocator<alignof(ext_value_t)>;
+				using factory_t		= ExtValueFactory<me_t>;
 				// для доступа из factory_t выносим в паблик
 				using mybase_t::NewValueBaseInplace;
 
 				static bool			IEnumValues_Reset(ExValueBase& obj_base_) {
-					ext_value_t& obj = static_cast<ext_value_t&>(obj_base_);
-					contained_t& obj_contained = obj.ContainedData_;
+					ext_value_t& obj			= static_cast<ext_value_t&>(obj_base_);
+					contained_t& obj_contained	= obj.ContainedData_;
 					//TODO
 					return false;
 				}
 				static IValuePtr	IEnumValues_GetValueAndMoveNext(ExValueBase& obj_base_) {
-					ext_value_t& obj = static_cast<ext_value_t&>(obj_base_);
-					contained_t& obj_contained = obj.ContainedData_;
+					ext_value_t& obj			= static_cast<ext_value_t&>(obj_base_);
+					contained_t& obj_contained	= obj.ContainedData_;
 					return obj_contained.GetValueAndMoveNext();
 				}
 				static bool			IEnumValues_Skip(ExValueBase& obj_base_, size_t c_elem_to_skip_) {
-					ext_value_t& obj = static_cast<ext_value_t&>(obj_base_);
-					contained_t& obj_contained = obj.ContainedData_;
+					ext_value_t& obj			= static_cast<ext_value_t&>(obj_base_);
+					contained_t& obj_contained	= obj.ContainedData_;
 					//TODO
 					return false;
 				}
 				static IValuePtr	IEnumValues_Clone(ExValueBase& obj_base_) {
-					ext_value_t& obj = static_cast<ext_value_t&>(obj_base_);
-					contained_t& obj_contained = obj.ContainedData_;
+					ext_value_t& obj			= static_cast<ext_value_t&>(obj_base_);
+					contained_t& obj_contained	= obj.ContainedData_;
 					//TODO
 					return { nullptr };
 				}
 
 				template<typename ContainerT>
-	#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
-				ext_value_t& CreateEnumerator(IEntityPtr&& entity_handler_, const ContainerT& container_) const {
+#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
+				ext_value_t& CreateEnumerator(IEntityPtr&& entity_handler_, ContainerT& container_) const {
 					return factory_t::InstanceCreate(*this, std::move(entity_handler_), container_);
 				}
-	#else
-				ext_value_t& CreateEnumerator(const ContainerT& container_) const {
+#else
+				ext_value_t& CreateEnumerator(ContainerT& container_) const {
 					return factory_t::InstanceCreate(*this, container_);
 				}
-	#endif
+#endif
 				constexpr TypeDescriptorForEnumerate() : mybase_t{}
 				{
 					//не создаваем средствами 1С
 					mybase_t::InstanceDeleter_ = factory_t::InstanceDelete;
 					//
-					TypeInfoFor_IEnumValues::PfnClone_ = IEnumValues_Clone;
-					TypeInfoFor_IEnumValues::PfnGetValueAndMoveNext_ = IEnumValues_GetValueAndMoveNext;
-					TypeInfoFor_IEnumValues::PfnReset_ = IEnumValues_Reset;
-					TypeInfoFor_IEnumValues::PfnSkip_ = IEnumValues_Skip;
+					TypeInfoFor_IEnumValues::PfnClone_					= IEnumValues_Clone;
+					TypeInfoFor_IEnumValues::PfnGetValueAndMoveNext_	= IEnumValues_GetValueAndMoveNext;
+					TypeInfoFor_IEnumValues::PfnReset_					= IEnumValues_Reset;
+					TypeInfoFor_IEnumValues::PfnSkip_					= IEnumValues_Skip;
 				}
 			};
 			//
 			static inline const TypeDescriptorForEnumerate descriptor_instance_{};
 			//
 			template<typename ContainerT>
-	#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
-			static TypeDescriptorForEnumerate::ext_value_t& CreateEnumerator(IEntityPtr&& entity_handler_, const ContainerT& container_) {
+#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
+			static TypeDescriptorForEnumerate::ext_value_t& CreateEnumerator(IEntityPtr&& entity_handler_, ContainerT& container_) {
 				return descriptor_instance_.CreateEnumerator(std::move(entity_handler_), container_);
 			}
-	#else
-			static TypeDescriptorForEnumerate::ext_value_t& CreateEnumerator(const ContainerT& container_) {
+
+#else
+			static TypeDescriptorForEnumerate::ext_value_t& CreateEnumerator(ContainerT& container_) {
 				return descriptor_instance_.CreateEnumerator(container_);
 			}
-	#endif
+#endif
 		};
 		//
+
 #if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
-		template<typename ContainerT>
-		IEntityPtr ExEnumeratorForContainer_Create(esb::_internal::IEntityPtr&& enumeratable_entity_handler_, const ContainerT& container_)
+		template<template<typename ContainerTy> typename EnumeratorForContainerTt, typename ContainerTy>
+		IEntityPtr ExEnumeratorForContainer_Create(esb::_internal::IEntityPtr&& enumeratable_entity_handler_, ContainerTy& container_)
 		{
-			using enumerator_t				= ExEnumeratorForContainer<ContainerT>;
+			using enumerator_t				= EnumeratorForContainerTt<ContainerTy>;
 			using enumerator_entity_t		= ExEntityForEnumerator<enumerator_t>;
 			using enumer_entity_factory_t	= ExEntityForEnumeratorFactory<enumerator_t>;
 			enumerator_entity_t& enumerator = enumer_entity_factory_t::CreateEnumerator(std::move(enumeratable_entity_handler_), container_);
 			return IEntityPtr{ static_cast<IUnknown&>(enumerator) };
 		}
+
 #else
 		template<typename ContainerT>
-		IEntityPtr ExEnumeratorForContainer_Create(const ContainerT& container_)
+		IEntityPtr ExEnumeratorForContainer_Create(ContainerTy& container_)
 		{
-			using enumerator_t				= ExEnumeratorForContainer<ContainerT>;
+			using enumerator_t				= EnumeratorForContainerTt<ContainerTy>;
 			using enumerator_entity_t		= ExEntityForEnumerator<enumerator_t>;
 			using enumer_entity_factory_t	= ExEntityForEnumeratorFactory<enumerator_t>;
 			enumerator_entity_t& enumerator = enumer_entity_factory_t::CreateEnumerator(container_);
@@ -696,29 +607,29 @@ namespace esb
 			//
 			static IEntityPtr IEnumeratable_GetEnumerator(ExValueBase& enumaratable_value_base_) {
 				if constexpr (is_contained_has_GetEnumerator<contained_t>) {
-					ext_value_t&	enumaratable_value = static_cast<ext_value_t&>(enumaratable_value_base_);
-					contained_t&	enumaratable = enumaratable_value.ContainedData_;
-	#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
-					return			enumaratable.IEnumeratable_GetEnumerator(query_entity_handler(enumaratable_value));
-	#else
+					ext_value_t& enumaratable_value = static_cast<ext_value_t&>(enumaratable_value_base_);
+					contained_t& enumaratable		= enumaratable_value.ContainedData_;
+#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
+					return			enumaratable.ESB_CONTAINED_GETENUMERATOR( query_entity_handler(enumaratable_value) );
+#else
 					return			enumaratable.IEnumeratable_GetEnumerator();
-	#endif
+#endif
 				}
 				else {
-					static_assert(is_contained_iterable<contained_t>, "ContainedData_ not iterable container.");
-					using contained_container_t = contained_data_accessor_const_t<contained_t>;	//std::vector<bool>
-					ext_value_t&	enumaratable_value = static_cast<ext_value_t&>(enumaratable_value_base_);
-					contained_t&	enumaratable = enumaratable_value.ContainedData_;
-	#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
-					return ExEnumeratorForContainer_Create<contained_container_t>(query_entity_handler(enumaratable_value), enumaratable.ESB_CONTAINED_DATA_ACCESSOR_NAME());
-	#else
-					return ExEnumeratorForContainer_Create<contained_container_t>(enumaratable.ESB_CONTAINED_DATA_ACCESSOR_NAME());
-	#endif
+					static_assert(is_contained_iterable<contained_t>, "ContainedData_ not iterable container.");					
+					using contained_container_t		= contained_data_accessor_const_t<contained_t>;				// (std::vector<bool>)
+					ext_value_t& enumaratable_value = static_cast<ext_value_t&>(enumaratable_value_base_);		// value которое содержит wrapper on (std::vector<bool>)								
+					contained_t& enumaratable		= enumaratable_value.ContainedData_;						// wrapper on (std::vector<bool>)
+#if defined(ESB_USE_OWNING_ENUMERATOR) && ESB_USE_OWNING_ENUMERATOR
+					return ExEnumeratorForContainer_Create<ExEnumeratorForContainerDefault, contained_container_t>(query_entity_handler(enumaratable_value), enumaratable.ESB_CONTAINED_DATA());
+#else
+					return ExEnumeratorForContainer_Create<ExEnumeratorForContainerDefault, contained_container_t>(enumaratable.ESB_CONTAINED_DATA());
+#endif
 				}
 			}
 			//		
 			TYPEDESCRIPTOR_CONSTRUCT_CONSTEXPR
-			static void Construct(TypeInfoFor_IEnumeratable& it)
+				static void Construct(TypeInfoFor_IEnumeratable& it)
 			{
 				it.PfnGetEnumerator_ = IEnumeratable_GetEnumerator;
 			}
@@ -763,7 +674,7 @@ namespace esb
 			{	//instance
 				mybase_t::InstanceCreatorFind_ = dispinterface_impl_ctor_find<disp_interface_t>();
 				mybase_t::InstanceDeleter_ = factory_t::InstanceDelete;
-				//conveter
+				//converter
 				mybase_t::ToBoolean_ = converter_t::PfnValueToBoolean();
 				mybase_t::ToNumeric_ = converter_t::PfnValueToNumeric();
 				mybase_t::ToString_ = converter_t::PfnValueToString();
@@ -858,28 +769,31 @@ namespace esb
 			using descriptor_t		= interface_descriptor_t<InterfaceT>;
 			using typedef_t			= esb::_internal::ExtTypeDef<descriptor_t>;
 			// для красоты семантики: PseudoArrayOfInt::ContainedDataType& vector_of_int = array_.GetContained().Data();
-			using ContainedType		= contained_t;
+			using ESB_CONTAINEDTYPE = contained_t;
 			using ContainedDataType = contained_data_accessor_t<contained_t>;
 		private:
 			ESB_CLASS_IMPLEMENT_MAKE_VAL(ValueForExEntity)
-			ESB_CLASS_IMPLEMENT_MAKE_OPT(ValueForExEntity)
-			static inline typedef_t						TypeObj_{};
+				ESB_CLASS_IMPLEMENT_MAKE_OPT(ValueForExEntity)
+				static inline typedef_t						TypeObj_{};
 			static inline const RuntimeRegistratorInit	on_init_{ MemberMethInvoker<&TypeObj_, &typedef_t::init>::invoke };
 		public:
 			static inline const TypeDef& Type_{ TypeObj_ };
 		public:
-			template<typename... ArgsT>
-			static me_t Create(ArgsT&&... args_) {
-				return make<me_t>(IValuePtr{ TypeObj_.CreateValueInstance(std::forward<ArgsT>(args_) ...) });
+			template<typename... ArgsTs>
+			static me_t Create(ArgsTs&&... args_) {
+				static_assert(std::is_constructible_v<contained_t, ArgsTs...>, "Contained object not constructable with this arguments.");
+				return make<me_t>(IValuePtr{ TypeObj_.CreateValueInstance(std::forward<ArgsTs>(args_) ...) });
 			}
 		public:
-			contained_t& GetContained()&					{ return descriptor_t::GetContained(*this); }
-			const contained_t& GetContained() const&		{ return descriptor_t::GetContained(*this); }
-			contained_t&& GetContained()&&					{ return descriptor_t::GetContained(*this); }
+			ESB_IMPLEMENT_ARGBYVAL_OPERATOR(me_t)
+		public:
+			contained_t& ESB_CONTAINED_GET()&					{ return descriptor_t::GetContained(*this); }
+			const contained_t& ESB_CONTAINED_GET() const&		{ return descriptor_t::GetContained(*this); }
+			contained_t&& ESB_CONTAINED_GET()&&					{ return descriptor_t::GetContained(std::move(*this)); }
 
-			explicit operator contained_t& ()&				{ return descriptor_t::GetContained(*this); }
-			explicit operator const contained_t& () const&	{ return descriptor_t::GetContained(*this); }
-			explicit operator contained_t && ()&&			{ return descriptor_t::GetContained(*this); }
+			explicit operator contained_t& ()&					{ return descriptor_t::GetContained(*this); }
+			explicit operator const contained_t& () const&		{ return descriptor_t::GetContained(*this); }
+			explicit operator contained_t && ()&&				{ return descriptor_t::GetContained(*this); }
 		};
 
 
@@ -893,8 +807,8 @@ namespace esb
 			using typedef_t = esb::_internal::ExtTypeDef<descriptor_t>;
 		private:
 			ESB_CLASS_IMPLEMENT_MAKE_VAL(ValueForExEntity)
-			ESB_CLASS_IMPLEMENT_MAKE_OPT(ValueForExEntity)
-			static inline typedef_t						TypeObj_{};
+				ESB_CLASS_IMPLEMENT_MAKE_OPT(ValueForExEntity)
+				static inline typedef_t						TypeObj_{};
 			static inline const RuntimeRegistratorInit	on_init_{ MemberMethInvoker<&TypeObj_, &typedef_t::init>::invoke };
 		public:
 			static inline const TypeDef& Type_{ TypeObj_ };
@@ -905,11 +819,46 @@ namespace esb
 			}
 		};
 
-		// конец Дескрипторы
-		/////////////////////////////////////////////////////////////////////////////////////////////
+	} //namespace _internal 
+
+
+	////TODO	А почему все это не в _internal ?
+	//template<typename T>
+	//inline constexpr bool is_esb_value_ext = requires
+	//{
+	//	requires is_esb_value_based<T>;
+	//	//
+	//	typename T::descriptor_t;
+	//	typename T::descriptor_t::esb_value_t;
+	//	requires std::is_same_v<typename T::descriptor_t::esb_value_t, T>;
+	//};
+	//template<typename T>
+	//inline constexpr bool is_esb_value_ext_with_contained = requires(T x)
+	//{
+	//	requires is_esb_value_ext<T>;
+	//	x.ESB_CONTAINED_GET();
+	//};
+	//template<typename T>
+	//inline constexpr bool is_esb_value_ext_with_contained_data = requires(T x)
+	//{
+	//	requires is_esb_value_ext_with_contained<T>;
+	//	x.ESB_CONTAINED_GET().ESB_CONTAINED_DATA();
+	//};
+
+	//template<typename T>
+	//inline constexpr bool is_contain_refence_type = requires
+	//{
+	//	typename T::ContainedType::DataType;
+	//	requires is_reference_type_v<typename T::ESB_CONTAINEDTYPE::ESB_CONTAINED_DATA_T>;
+	//};
+
+	// конец Дескрипторы
+	/////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
+	namespace _internal 
+	{
 
 ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY()
 		//
@@ -942,23 +891,13 @@ ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY()
 			static bool RevokeType()	{ return esb::_internal::ExTypeRevoke(ExtTypeDefT::GetTypeDescriptor()); }
 		};
 		//
-		ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY
+ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY
 
 
-
-#define ESB_INTERFACEDEF_VALUE_T(CLASS_T_)				ESB_INTERFACEDEF_DESCRIPTOR_T(CLASS_T_)::esb_value_t
-#define ESB_INTERFACEDEF_FACTORY_T(CLASS_T_)			esb::_internal::ExtTypeFactoryImplementation< ESB_INTERFACEDEF_VALUE_T(CLASS_T_) :: typedef_t >
-#define ESB_INTERFACEDEF_FACTORY_INSTANCE(CLASS_T_)		inline ESB_INTERFACEDEF_FACTORY_T(CLASS_T_) ESB_INTERFACEDEF_FACTORY_T(CLASS_T_)::Instance_{}
-
-
-#define ESB_VALUEDEF(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)		\
-	ESB_INTERFACEDEF_VALUE(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_);			\
-	using ESB_NAME_ =  ESB_INTERFACEDEF_VALUE_T(CLASS_T_)
-
-
-#define ESB_VALUEDEF_WITH_FACTORY(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)		\
-	ESB_VALUEDEF(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_);						\
-	ESB_INTERFACEDEF_FACTORY_INSTANCE(CLASS_T_)
+//... - CLASS_T_ (c++ класс или специализация шаблона на котором построен интерфейс для 1С)
+#define ESB_INTERFACEDEF_VALUE_T(...)				ESB_INTERFACEDEF_DESCRIPTOR_T(__VA_ARGS__)::esb_value_t
+#define ESB_INTERFACEDEF_FACTORY_T(...)				esb::_internal::ExtTypeFactoryImplementation< ESB_INTERFACEDEF_VALUE_T(__VA_ARGS__) :: typedef_t >
+#define ESB_INTERFACEDEF_FACTORY_INSTANCE(...)		inline ESB_INTERFACEDEF_FACTORY_T(__VA_ARGS__) ESB_INTERFACEDEF_FACTORY_T(__VA_ARGS__)::Instance_{}
 
 
 		template<class EsbExtEntityT>
@@ -981,9 +920,13 @@ ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY()
 			static const ExtEntityRegistrator Instance_;
 		};
 
-#define ESB_VALUEDEF_WITH_FACTORY_AND_REG(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)		\
-	ESB_VALUEDEF_WITH_FACTORY(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_);					\
-	inline const esb::_internal::ExtEntityRegistrator<ESB_NAME_>	esb::_internal::ExtEntityRegistrator<ESB_NAME_>::Instance_{}
+//ESB_ENTITY_VALUE_T_
+#define ESB_INTERFACEDEF_REGISTRATOR_T(...)										\
+    esb::_internal::ExtEntityRegistrator<__VA_ARGS__>
+
+//ESB_ENTITY_VALUE_T_
+#define ESB_INTERFACEDEF_REGISTRATOR_INSTANCE(...)								\
+    inline const ESB_INTERFACEDEF_REGISTRATOR_T(__VA_ARGS__) ESB_INTERFACEDEF_REGISTRATOR_T(__VA_ARGS__)::Instance_{}
 
 
 #define ESB_INTERFACEDEF_DONE_WITH_VALUE_AND_FACTORY(CLASS_T_, ESB_NAME_)		\
@@ -993,7 +936,26 @@ ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY()
 
 #define ESB_INTERFACEDEF_DONE_WITH_VALUE_AND_FACTORY_REG(CLASS_T_, ESB_NAME_)	\
 	ESB_INTERFACEDEF_DONE_WITH_VALUE_AND_FACTORY(CLASS_T_, ESB_NAME_);			\
-	inline const esb::_internal::ExtEntityRegistrator<ESB_NAME_>	esb::_internal::ExtEntityRegistrator<ESB_NAME_>::Instance_{}
+	ESB_INTERFACEDEF_REGISTRATOR_INSTANCE(ESB_NAME_)
+
+
+//... - CLASS_T_ (c++ класс или специализация шаблона на котором построен интерфейс для 1С)
+#define ESB_INTERFACEDEF_FACTORY_INSTANCE_AND_REG(...)							\
+    ESB_INTERFACEDEF_FACTORY_INSTANCE(__VA_ARGS__);								\
+    ESB_INTERFACEDEF_REGISTRATOR_INSTANCE(ESB_INTERFACEDEF_VALUE_T(__VA_ARGS__))
+
+
+#define ESB_VALUEDEF(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)			\
+	ESB_INTERFACEDEF_VALUE(CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_);				\
+	using ESB_NAME_ =  ESB_INTERFACEDEF_VALUE_T(CLASS_T_)
+
+#define ESB_VALUEDEF_WITH_FACTORY(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)		\
+	ESB_VALUEDEF(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_);						\
+	ESB_INTERFACEDEF_FACTORY_INSTANCE(CLASS_T_)
+
+#define ESB_VALUEDEF_WITH_FACTORY_AND_REG(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_)		\
+	ESB_VALUEDEF_WITH_FACTORY(ESB_NAME_, CLASS_T_, GUID_STR_, NAME_PAIR_, TEXT_);					\
+	ESB_INTERFACEDEF_REGISTRATOR_INSTANCE(ESB_NAME_)
 
 
 		// Специфический авто-типа-регистратор для DelegatToMeth
@@ -1015,6 +977,55 @@ ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY()
 		};
 #define ESB_REGISTER_AUTO_DELEGAT_TO_METH()	\
 	inline const esb::_internal::ExtEntityRegistrator<DelegatToMeth> esb::_internal::ExtEntityRegistrator<DelegatToMeth>::Instance_{}
+
+
+//...CLASS_WRAPPER_T_
+#define ESB_VALUE_FOR_CONTAINED_T(...)		                                                    \
+    esb::_internal::ValueForExEntity<ESB_INTERFACEDEF_T(__VA_ARGS__), __VA_ARGS__>
+
+	template<typename ContainedTy>
+	using ValueFor = esb::_internal::ValueForExEntity<ESB_INTERFACEDEF_T(ContainedTy), ContainedTy>;
+
+	
+
+#define ESB_INTERFACEDEF_DONE_WITH_VALUE(CLASS_T_, ESB_NAME_)		\
+	ESB_INTERFACEDEF_DONE(CLASS_T_);								\
+	using ESB_NAME_ =  ESB_INTERFACEDEF_VALUE_T(CLASS_T_)
+
+
+// образует имя для intermediate-wrapper класса. 
+// сейчас имя класа 'value-для-1с' (тот который унаследован от ValueForExEntity) плюс суффикс 'Object'. 
+// возможно будет лучше суффикс 'Wrapper'
+// возможно лучше в будущем от этого класса вообще избавиться т.к. класс 'value-для-1С' сам по себе является враппером, матрешка, TODO, подумать..
+//TODO	Во многих местах, макросах и т.п. ожидается непосредственно имя уже с суффиксом.
+//		НУЖНО везде рефакторить и менять чтобы это исподнее белье наружу не вылезало.
+//		тогда может быть и можно будет попробовать избавиться от этого 'intermediate-wrapper класса'
+#define ESB_CLASS_WRAPPER_NAME(CLASS_VALUE_)									\
+	CLASS_VALUE_##Object
+
+//NOTE	Если сюда непосредственно передавать WRAPPED_TYPE_ и делать проверку noexcept( noexcept(WRAPPED_TYPE_(...
+//		то если тип с конст: нр. ClosedInterval const, то ошибка парсинга от МС: непредвиденный токен const
+//		а если тот-же через псевдоним (одним токеном), то ош нет.
+#define ESB_CLASS_WRAPPER_CTOR(CLASS_WRAPPER_, WRAPPED_TYPE_, WRAPPED_DATA_)	\
+        template<typename... ArgsTs>                                            \
+        CLASS_WRAPPER_(ArgsTs&&... args_) noexcept( noexcept(ESB_CONTAINED_DATA_T(std::forward<ArgsTs>(args_)...)) ) : WRAPPED_DATA_{ std::forward<ArgsTs>(args_)... } {}
+
+#define ESB_CLASS_WRAPPER_HEADER(DATA_T_, CLASS_WRAPPER_)													\
+	ESB_DECLARE_CONTAINED_DATA_RW(DATA_T_, MyData_)															\
+	ESB_CLASS_WRAPPER_CTOR(CLASS_WRAPPER_, DATA_T_, MyData_)
+
+
+#define ESB_CLASS_WRAPPER_OLD(DATA_T_, CLASS_VALUE_)													  \
+    struct  ESB_CLASS_WRAPPER_NAME(CLASS_VALUE_);                                                     \
+    using   CLASS_VALUE_ = ESB_VALUE_FOR_CONTAINED_T(ESB_CLASS_WRAPPER_NAME(CLASS_VALUE_));           \
+    struct ESB_CLASS_WRAPPER_NAME(CLASS_VALUE_)                                                       \
+    {                                                                                                 \
+        ESB_CLASS_WRAPPER_HEADER(DATA_T_, ESB_CLASS_WRAPPER_NAME(CLASS_VALUE_))
+
+
+
+
+
 
 	} //_internal
 } //namespace esb-ext

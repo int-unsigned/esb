@@ -1,0 +1,124 @@
+#pragma once
+
+// *** include *Proto definition ***
+//----------------------------------
+//TODO	Классы ..Proto НЕ обрабатываются Свиг. 
+//		Это классы кодогенерированные google protoc кодогенератором
+//		Они настолько "кодогенерированы", что их Свиг просто НЕ ПОНИМАЕТ (Ош парсинга)
+//		Впочим их также не понимает и Студия (т.е. EDG-компилятор)
+//TODO	Самое правильное это "доделать" кодогенератор google-protoc для генерации врапперов для ESB
+//		Пока же эти классы "вводятся вручную" в компоненте СатРешатель
+//TODO	Здесь, для Свиг, почему-то приходится не просто декларировать эти классы,
+//		но давать их с пустой имплементацией.
+//		Просто декларирование Свиг почему-то не понимает. Разбираться!
+//
+// Все ..Proto считаем value-типами
+%esb_wrap_info_cref(operations_research::sat::CpModelProto,				"5571399D-7BC2-4F9D-80DA-9FFBC19FCC58", "OptimizationModelProtoCRef",	"ОптимизационнаяМодельПротоКонстСсылка",		"");
+%esb_wrap_info_ref(	operations_research::sat::CpModelProto,				"C3FA3E39-08F2-410C-95A0-B7828385F30E", "OptimizationModelProtoRef",	"ОптимизационнаяМодельПротоСсылка",				"");
+%esb_wrap_as_val(	operations_research::sat::CpModelProto,  			"791D988B-3BE4-449B-BF70-D7690E4210BA", "OptimizationModelProto", 		"ОптимизационнаяМодельПрото",					"");
+
+%esb_wrap_info_cref(operations_research::sat::LinearExpressionProto,	"B1A0362B-5300-4FBD-A2E5-B08C7D8489BF", "LinearExpressionProtoCRef",	"ЛинейноеВыражениеПротоКонстСсылка",			"");
+%esb_wrap_as_val(	operations_research::sat::LinearExpressionProto,	"C40748C8-DA3D-4FB2-9CBA-4B5F1EB4E2F3", "LinearExpressionProto", 		"ЛинейноеВыражениеПрото",						"");
+%esb_ctor_creator(operations_research::sat::LinearExpressionProto::LinearExpressionProto());
+
+%esb_wrap_info_cref(operations_research::sat::ConstraintProto,			"F8658CC4-033F-4DA8-966A-6AA83151B105", "ConstraintProtoCRef",			"ОграничениеПротоКонстСсылка",					"");
+%esb_wrap_info_ref(	operations_research::sat::ConstraintProto,			"EC917E8F-7036-4FE4-A7C6-37361083D179", "ConstraintProtoRef",			"ОграничениеПротоСсылка",						"");
+%esb_wrap_as_val(	operations_research::sat::ConstraintProto,       	"0FD1441C-8E21-4C18-AC79-D9A222BD5A4E", "ConstraintProto",				"ОграничениеПрото",								"");
+
+namespace operations_research::sat
+{
+	[[deprecated]]
+	class LinearExpressionProto
+	{};
+	class CpModelProto
+	{};
+	class ConstraintProto
+	{};
+}
+
+
+
+%esb_wrap_info_cref(DecisionStrategyProto,	"A27A148D-852D-485A-90FF-7E4FDEDF3792", "DecisionStrategyProtoCRef",	"СтратегияПринятияРешенийПротоКонстСсылка",		"");
+%esb_wrap_as_val(	DecisionStrategyProto, 	"B7A4502F-C405-4AF9-9158-8056032A9CCA", "DecisionStrategyProto",		"СтратегияПринятияРешенийПрото",				"");
+%esb_ctor_creator(operations_research::sat::DecisionStrategyProto::DecisionStrategyProto());
+%esb_wrap_info_stat(operations_research::sat::DecisionStrategyProto,		"D15F3422-9217-4BFA-A435-1A8A63659896", "DecisionStrategyProtoStat",	"СтратегияПринятияРешенийПротоСтатик",			"");
+//
+%esb_wrap_info_enum(operations_research::sat::DecisionStrategyProto::VariableSelectionStrategy,	"BCDA8C80-DF2E-430C-B8D8-10C76C9F7D20", "VariableSelectionStrategyEnumerator", 	"СтратегияВыбораПеременныхЭнумератор", 	"");
+%esb_wrap_info(		operations_research::sat::DecisionStrategyProto::VariableSelectionStrategy,	"67B3E4D7-4271-4231-B73C-691EDD4284C0", "VariableSelectionStrategy", 			"СтратегияВыбораПеременных", 			"");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::VariableSelectionStrategy::DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_FIRST,			"CHOOSE_FIRST",			"ВЫБРАТЬ_ПЕРВЫЙ");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::VariableSelectionStrategy::DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_LOWEST_MIN,		"CHOOSE_LOWEST_MIN",		"ВЫБРАТЬ_НИЗШИЙ_МИНИМАЛЬНЫЙ");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::VariableSelectionStrategy::DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_HIGHEST_MAX,		"CHOOSE_HIGHEST_MAX",		"ВЫБРАТЬ_ВЫСШИЙ_МАКСИМАЛЬНЫЙ");				
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::VariableSelectionStrategy::DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_MIN_DOMAIN_SIZE,	"CHOOSE_MIN_DOMAIN_SIZE",	"ВЫБРАТЬ_МИНИМАЛЬНЫЙ_ПО_РАЗМЕРУ_ДОМЕНА");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::VariableSelectionStrategy::DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_MAX_DOMAIN_SIZE,	"CHOOSE_MAX_DOMAIN_SIZE",	"ВЫБРАТЬ_МАКСИМАЛЬНЫЙ_ПО_РАЗМЕРУ_ДОМЕНА");
+//
+%esb_wrap_info_enum(operations_research::sat::DecisionStrategyProto::DomainReductionStrategy,		"B4E20674-FBFD-4928-BE1F-E54152E47050", "DomainReductionStrategyEnumerator", 	"СтратегияСокращенияДоменовЭнумератор", "");
+%esb_wrap_info(		operations_research::sat::DecisionStrategyProto::DomainReductionStrategy, 	"B4E20674-FBFD-4928-BE1F-E54152E47050", "DomainReductionStrategy", 				"СтратегияСокращенияДоменов", 			"");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::DomainReductionStrategy::DecisionStrategyProto_DomainReductionStrategy_SELECT_MIN_VALUE,		"SELECT_MIN_VALUE",		"ВЫБРАТЬ_МИНИМАЛЬНОЕ_ЗНАЧЕНИЕ");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::DomainReductionStrategy::DecisionStrategyProto_DomainReductionStrategy_SELECT_MAX_VALUE,		"SELECT_MAX_VALUE",		"ВЫБРАТЬ_МАКСИМАЛЬНОЕ_ЗНАЧЕНИЕ");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::DomainReductionStrategy::DecisionStrategyProto_DomainReductionStrategy_SELECT_LOWER_HALF,		"SELECT_LOWER_HALF",	"ВЫБРАТЬ_НИЖНЮЮ_ПОЛОВИНУ");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::DomainReductionStrategy::DecisionStrategyProto_DomainReductionStrategy_SELECT_UPPER_HALF,		"SELECT_UPPER_HALF",	"ВЫБРАТЬ_ВЕРХНЮЮ_ПОЛОВИНУ");
+%esb_wrap_names(operations_research::sat::DecisionStrategyProto::DomainReductionStrategy::DecisionStrategyProto_DomainReductionStrategy_SELECT_MEDIAN_VALUE,	"SELECT_MEDIAN_VALUE",	"ВЫБРАТЬ_МЕДИАННОЕ_ЗНАЧЕНИЕ");
+//
+namespace operations_research::sat
+{
+class DecisionStrategyProto
+{
+public:
+	/* from cp_model.pb.h
+		namespace operations_research::sat
+		enum DecisionStrategyProto_VariableSelectionStrategy : int 
+		{
+		  DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_FIRST              = 0,
+		  DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_LOWEST_MIN         = 1,
+		  DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_HIGHEST_MAX        = 2,
+		  DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_MIN_DOMAIN_SIZE    = 3,
+		  DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_MAX_DOMAIN_SIZE    = 4,
+		  DecisionStrategyProto_VariableSelectionStrategy_DecisionStrategyProto_VariableSelectionStrategy_INT_MIN_SENTINEL_DO_NOT_USE_ =
+		      std::numeric_limits<::int32_t>::min(),
+		  DecisionStrategyProto_VariableSelectionStrategy_DecisionStrategyProto_VariableSelectionStrategy_INT_MAX_SENTINEL_DO_NOT_USE_ =
+		      std::numeric_limits<::int32_t>::max(),
+		};
+		}}
+	*/
+	enum class VariableSelectionStrategy  : int 
+	{
+		DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_FIRST              = 0,
+		DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_LOWEST_MIN         = 1,
+		DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_HIGHEST_MAX        = 2,	
+		DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_MIN_DOMAIN_SIZE    = 3,
+		DecisionStrategyProto_VariableSelectionStrategy_CHOOSE_MAX_DOMAIN_SIZE    = 4,
+	};
+
+	/*
+		namespace operations_research::sat
+		enum DecisionStrategyProto_DomainReductionStrategy : int {
+		  DecisionStrategyProto_DomainReductionStrategy_SELECT_MIN_VALUE = 0,
+		  DecisionStrategyProto_DomainReductionStrategy_SELECT_MAX_VALUE = 1,
+		  DecisionStrategyProto_DomainReductionStrategy_SELECT_LOWER_HALF = 2,
+		  DecisionStrategyProto_DomainReductionStrategy_SELECT_UPPER_HALF = 3,
+		  DecisionStrategyProto_DomainReductionStrategy_SELECT_MEDIAN_VALUE = 4,
+		  DecisionStrategyProto_DomainReductionStrategy_DecisionStrategyProto_DomainReductionStrategy_INT_MIN_SENTINEL_DO_NOT_USE_ =
+		      std::numeric_limits<::int32_t>::min(),
+		  DecisionStrategyProto_DomainReductionStrategy_DecisionStrategyProto_DomainReductionStrategy_INT_MAX_SENTINEL_DO_NOT_USE_ =
+		      std::numeric_limits<::int32_t>::max(),
+		};
+		}}
+	*/
+	enum class DomainReductionStrategy : int
+	{
+		DecisionStrategyProto_DomainReductionStrategy_SELECT_MIN_VALUE 	= 0,    
+		DecisionStrategyProto_DomainReductionStrategy_SELECT_MAX_VALUE 	= 1,    
+		DecisionStrategyProto_DomainReductionStrategy_SELECT_LOWER_HALF 	= 2,   
+		DecisionStrategyProto_DomainReductionStrategy_SELECT_UPPER_HALF 	= 3,   
+		DecisionStrategyProto_DomainReductionStrategy_SELECT_MEDIAN_VALUE = 4, 	
+	};
+};
+} // namespace operations_research::sat
+//
+// ^^^^^^^^^^^^^^^^^^^^^
+// end *Proto definition
+
+
+// *** end of cp_model.pb.h ***
+
+

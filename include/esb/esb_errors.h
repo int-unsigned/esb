@@ -124,6 +124,12 @@
 //Попытка изменить значение константного аргумента.
 #define ESL_THROW_UNEXPECTED_VARIABLE_SET_VALUE()			ESL_THROW(ESL_T("Попытка изменить значение константного аргумента."))
 //
+#define ESL_THROW_UNEXPECTED_VARIABLE_RET_NULL()			ESL_THROW(ESL_T("Переменная для возврата значения отсутствует."))
+//
+#define ESL_THROW_EXPECTED_ONE_CHAR_STRING()				ESL_THROW(ESL_T("Ожидается строка из одного символа."))
+//
+#define ESL_THROW_ERROR_IN_STRING_CONVERSION()				ESL_THROW(ESL_T("Ошибка при конвертации строки."))
+//
 #define ESL_THROW_TYPE_BYNAME_NOT_FOUND()					ESL_THROW(ESL_T("Тип <по-имени> не найден."))
 // 
 #define ESL_THROW_EXPECTED_UNSIGNED()						ESL_THROW(ESL_T("Ожидается не-отрицательное числовое значение."))
@@ -133,7 +139,11 @@
 #define ESL_THROW_NUMERIC_LONG_OVERFLOW()					ESL_THROW(ESL_T("Числовое значение превосходит по величине тип long."))
 //
 #define ESL_THROW_NUMERIC_SIZET_OVERFLOW()					ESL_THROW(ESL_T("Числовое значение превосходит по величине тип size_t."))
-
+//
+#define ESL_THROW_INVOKE_RETURN_THIS_FAILED()				ESL_THROW(ESL_T("Метод объекта должен возвращать ссылку на свои данные."))
+//
+#define ESL_THROW_CONTAINER_FIND_NOT_SUPPORTED_NO_EQ()		ESL_THROW(ESL_T("Метод 'Найти' контейнера не поддерживается, так как элементы контейнера не поддерживают сравнение на равенство."))
+//
 #define ESL_THROW_INTEGER_OVERFLOW(INTEGER_DT_)				ESL_THROW(ESL_T("Числовое значение превосходит по величине тип " #INTEGER_DT_ "." ))
 
 namespace esb {
@@ -156,6 +166,7 @@ namespace esb {
 	ESB_THROW_INTEGER_OVERFLOW_IMPL(unsigned long)
 	ESB_THROW_INTEGER_OVERFLOW_IMPL(unsigned long long)
 	ESB_THROW_INTEGER_OVERFLOW_IMPL(/*plain*/ char)
+	ESB_THROW_INTEGER_OVERFLOW_IMPL(char16_t)
 #undef ESB_THROW_INTEGER_OVERFLOW_IMPL
 
 	//template<> ESB_NORETURN inline void throw_error_integer_overflow<long>()	{ ESL_THROW_NUMERIC_LONG_OVERFLOW(); }

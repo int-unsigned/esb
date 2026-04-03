@@ -346,6 +346,7 @@ namespace esb {
 
 	void					IVariable_SetValue(IVariable& target_, const IValuePtr& val_);
 	void					IVariable_SetValue(IVariable& target_, IValuePtr&& val_);
+	void					IVariable_SetValue(IVariable& target_, IValue& val_);		// для ExtValue
 	IValuePtr				IVariable_GetValue(const IVariable& source_);
 
 	void					IObjectMethods_InvokeAsProc(IObject& obj_, dispid_t meth_);
@@ -421,7 +422,6 @@ namespace esb {
 	void					AxCollection_ReplaceOrInsertFromGetOrUndef(IAxCollection& to_collection_, const IValuePtr& to_key_, 
 																		IAxCollectionRO& from_collection_, const IValuePtr& from_key_);
 	String					FormatVar(const IVariable& Var_, const String& FmtString_);
-	int						collator_compare(const String& s1_, const String& s2_);
 }
 
 // esbhlp interface
@@ -447,21 +447,16 @@ namespace esb
 	class Arbitrary;
 	class Undefined;
 	using Undef = Undefined;
-	template<class... EsbClassesT>	class ClassMix;
+	template<class... EsbClassesT>	class OneOfValue;
 	template<class EsbClassT>		class VarArgumentByValOnThat;
 	class String;
 
 	template<class EsbClassT>
-	class Var;
+	class VarByVal;
 
 #if defined(ESB_USE_RUSSIAN) && ESB_USE_RUSSIAN
 	using Произвольный = Arbitrary;
 #endif
-
-
-
-	template<typename>
-	struct Invoker;
 
 
 // Класс VarArgumentByValOnThat берет просто обычную константную ссылку на Value и вообще-то желательно давать это делать только если Value - lvalue
@@ -655,7 +650,7 @@ namespace esb
 	template<class T>
 	constexpr bool is_esb_object_dual = requires {				// проверять is_esb_object_based<T> излишне, т.к. ObjectDual прямо унаследован от Object
 		typename T::dual_t;
-		requires std::is_base_of_v<ObjectDual<T::dual_t>, T>;	// requires обязательно, чтобы проверило на true, без него проверяет только на корректность
+		requires std::is_base_of_v<ObjectDual<typename T::dual_t>, T>;	// requires обязательно, чтобы проверило на true, без него проверяет только на корректность
 	};
 
 
@@ -677,7 +672,7 @@ namespace esb
 	constexpr bool is_esb_object_dual2 = requires { 
 		typename T::dual1_t; 
 		typename T::dual2_t; 
-		requires std::is_base_of_v<ObjectDual2<T::dual1_t, T::dual2_t>, T>;
+		requires std::is_base_of_v<ObjectDual2<typename T::dual1_t, typename T::dual2_t>, T>;
 	};
 
 
@@ -695,7 +690,7 @@ namespace esb
 	template<class T>
 	constexpr bool is_esb_value_dual = requires { 
 		typename T::dual_t;
-		requires std::is_base_of_v<ValueDual<T::dual_t>, T>;
+		requires std::is_base_of_v<ValueDual<typename T::dual_t>, T>;
 	};
 
 
@@ -872,8 +867,8 @@ namespace esb
 
 
 	class Arbitrary : public Value {
-		friend Arbitrary make<Arbitrary>(IValuePtr&&);
-		friend Var<Arbitrary>;
+		friend Arbitrary esb::make<Arbitrary>(IValuePtr&&);
+		friend VarByVal<Arbitrary>;
 		Arbitrary(IValuePtr&& ival_) : Value(std::move(ival_))
 		{}
 	public:
@@ -911,48 +906,128 @@ namespace esb
 
 
 	template<class... EsbClasses>
-	class ClassMix : public Value{
-		friend ClassMix<EsbClasses...> make<ClassMix<EsbClasses...>>(IValuePtr&&);
-		ClassMix(IValuePtr&& ival_) : Value(std::move(ival_))
+	class OneOfValue : public Value
+	{
+		friend OneOfValue<EsbClasses...> make<OneOfValue<EsbClasses...>>(IValuePtr&&);
+		OneOfValue(IValuePtr&& ival_) : Value(std::move(ival_))
 		{}
 	public:
 		using Types = typepack<EsbClasses...>;
 	public:
-		template<class EsbClassT>	requires is_type_in_list<EsbClassT, EsbClasses...> 
+		template<class EsbClassT>	requires is_type_in_list_v<EsbClassT, EsbClasses...> 
 		bool				is() const			{ return check_interface<EsbClassT>(*this);}
-		template<class EsbClassT> 	requires is_type_in_list<EsbClassT, EsbClasses...>
-		EsbClassT			make() const		{ return check_and_make_copy<EsbClassT>(get_interface(*this)); }
-		template<class EsbClassT> 	requires is_type_in_list<EsbClassT, EsbClasses...>
-		ClassOpt<EsbClassT>	make_if() const		{ return make_opt<EsbClassT>(*this); }
+
+		//NOTE	Формально мы возвращаем копию (check_and_make_copy) по значению, но суть в том, что это копия указателя - IValuePtr
+		//		и при этом получается, что EsbClassT теряет константность (становится movable &&), даже если мы были константой
+		//		для врапперов это означает, что из них можно "забрать" содержащиеся данные и юзер на стороне 1С будет очень удивлен...
+		//		Поэтому для make тоже две перегрузки
+		template<class EsbClassT> 	requires is_type_in_list_v<EsbClassT, EsbClasses...>
+		const EsbClassT		make() const		{ return check_and_make_copy<EsbClassT>(get_interface(*this)); }
+		template<class EsbClassT> 	requires is_type_in_list_v<EsbClassT, EsbClasses...>
+		EsbClassT			make() 				{ return check_and_make_copy<EsbClassT>(get_interface(*this)); }
+		//
+		template<class EsbClassT> 	requires is_type_in_list_v<EsbClassT, EsbClasses...>
+		const ClassOpt<EsbClassT>	make_if() const { return make_opt<EsbClassT>(*this); }
+		template<class EsbClassT> 	requires is_type_in_list_v<EsbClassT, EsbClasses...>
+		ClassOpt<EsbClassT>			make_if()		{ return make_opt<EsbClassT>(*this); }
+		//
 		template<class EsbClassT>
-		requires is_esb_value_simple<EsbClassT> && is_type_in_list<EsbClassT, EsbClasses...>
+		requires is_esb_value_simple<EsbClassT> && is_type_in_list_v<EsbClassT, EsbClasses...>
 		EsbClassT& as() &						{ return check_and_cast<EsbClassT>(*this);		}
 		template<class EsbClassT>
-		requires is_esb_value_simple<EsbClassT> && is_type_in_list<EsbClassT, EsbClasses...>
+		requires is_esb_value_simple<EsbClassT> && is_type_in_list_v<EsbClassT, EsbClasses...>
 		const EsbClassT& as() const &			{ return check_and_cast<EsbClassT>(*this);		}
 		template<class EsbClassT>
-		requires is_esb_value_simple<EsbClassT> && is_type_in_list<EsbClassT, EsbClasses...>
+		requires is_esb_value_simple<EsbClassT> && is_type_in_list_v<EsbClassT, EsbClasses...>
 		EsbClassT&& as()&&						{ return check_and_cast<EsbClassT>(std::move(*this));	}
 	};
 
 	template<typename>
-	inline constexpr bool is_esb_mix = false;
+	inline constexpr bool is_one_of_value = false;
 	template<typename... EsbClasses>
-	inline constexpr bool is_esb_mix<ClassMix<EsbClasses...>> = true;
+	inline constexpr bool is_one_of_value<OneOfValue<EsbClasses...>> = true;
+
+	namespace _internal 
+	{
+		template<typename... EsbClasses>
+		struct one_of_using_helper : std::type_identity<OneOfValue<EsbClasses...>> {};
+		template<typename... EsbClasses>
+		struct one_of_using_helper< typepack<EsbClasses...> > : std::type_identity<OneOfValue<EsbClasses...>> {};
+
+		template<typename... EsbClasses>
+		struct one_of_size;
+		template<typename... EsbClasses>
+		struct one_of_size<OneOfValue<EsbClasses...>> : std::integral_constant<size_t, sizeof...(EsbClasses)> {};
+	}
+	template<typename... EsbClasses>
+	inline constexpr size_t one_of_size_v = _internal::one_of_size<EsbClasses...>::value;
 
 	//TOBE: UndefOr используется для индикации опт-значения аргумента. Ввиду этого возможно целесообразно не просто алаис, а класс с дополнительным оператор-буул 
 	//		если Undef:false Else:true плюс оператор * для не-Undef содержимого...
 	//		Фактически ClassOpt получается... Только там invalid_state == nullptr, а здесь == Undef
-	//INFO	Параметр в диспатч-лайк-интерфейсе считается опт-параметром если Undef первый. Т.е. ClassMix<Undef, Numeric> - опт, а ClassMix<Numeric, Undef> - не-опт.
+	//INFO	Параметр в диспатч-лайк-интерфейсе считается опт-параметром если Undef первый. Т.е. OneOfValue<Undef, Numeric> - опт, а OneOfValue<Numeric, Undef> - не-опт.
 	template<class EsbClassT>
-	using UndefOr = ClassMix<Undef, EsbClassT>;
+	using UndefOr = OneOfValue<Undef, EsbClassT>;
 
-
+	//NOTE	Это "удобный" псевдоним для OneOfValue, восстанавливающий класс как из списка типов, так и из typepack типов
+	//		НО, к сожалению по правилам с++ он не может использоваться при специализации структур - получается невыводимый контекст
+	//		ПРИ специализации структур нужно использовать именно имя класса OneOfValue
+	//		и вообще по возможности там где однозначно понятно, что это OneOfValue нужно использовать именно имя класса, нр. в возвращаемых значениях
+	//		(см. cast_one_of_to_subset_helper)
 	template<class... EsbClasses>
-	using OneOf = ClassMix<EsbClasses...>;
-	// для макросов, которые угловые скобки не понимают
-#define ESB_ONEOF(...)		OneOf<PP_EXPAND_LATER(__VA_ARGS__)>
+	using OneOf = typename _internal::one_of_using_helper< EsbClasses... >::type;
 
+	// для макросов, которые угловые скобки не понимают
+#define ESB_ONEOF(...)		OneOfValue<PP_EXPAND_LATER(__VA_ARGS__)>
+
+
+	namespace _internal
+	{
+		template<typename OneOfTo, typename OneOfFrom>
+		struct static_cast_one_of_to_subset_helper;
+		template<typename... OneOfToTs, typename... OneOfFromTs>
+		struct static_cast_one_of_to_subset_helper<OneOfValue<OneOfToTs...>, OneOfValue<OneOfFromTs...> >
+		{
+			static_assert(is_typepack_subset_of_v<typepack<OneOfToTs...>, typepack<OneOfFromTs...>>, "Casting OneOf possible only to subset.");
+			//TODO	В общем костыль, нужно на auto&& и как-то "common-Value-type" выводить
+			static decltype(auto) do_cast(OneOfValue<OneOfFromTs...>& one_of_value_)
+			{
+				return static_cast<OneOfValue<OneOfToTs...>&>( static_cast<Value&>(one_of_value_) );
+			}
+			static decltype(auto) do_cast(const OneOfValue<OneOfFromTs...>& one_of_value_)
+			{
+				return static_cast<const OneOfValue<OneOfToTs...>&>( static_cast<const Value&>(one_of_value_) );
+			}
+			static decltype(auto) do_cast(OneOfValue<OneOfFromTs...>&& one_of_value_)
+			{
+				return static_cast<OneOfValue<OneOfToTs...>&&>( static_cast<Value&&>(one_of_value_) );
+			}
+			static decltype(auto) do_cast(const OneOfValue<OneOfFromTs...>&& one_of_value_)
+			{
+				return static_cast<const OneOfValue<OneOfToTs...>&&>( static_cast<const Value&&>(one_of_value_) );
+			}
+		};
+	}
+	//
+	template<typename OneOfTo, typename OneOfFrom>
+	decltype(auto) static_cast_one_of_to_subset(OneOfFrom&& one_of_value_)
+	{
+		return _internal::static_cast_one_of_to_subset_helper<std::remove_cvref_t<OneOfTo>, std::remove_cvref_t<OneOfFrom>>::do_cast(std::forward<OneOfFrom>(one_of_value_));
+	}
+
+
+	//NOTE	Мы в с++ и не можем из функции возвращать, скажем, или Undef или Numeric
+	//		мы можем возвращать только какой-то один конкретный класс, скажем UndefOr<Numeric>
+	//		т.е. неопределенное значение у нас тоже "типизированное" для Numeric
+	//		метод make_undef_or<Numeric>() без аргумента как раз и создает такое "типизированное" неопределенное значение. 
+	template<typename T>
+	UndefOr<T>  make_undef_or() {
+		return make< UndefOr<T> >(IValuePtr{ get_interface(Undef::Value_) });
+	}
+	template<typename T>
+	UndefOr<T>  make_undef_or(T&& value_) {
+		return make< UndefOr<T> >(get_interface(std::move(value_)));
+	}
 
 
 
@@ -981,13 +1056,13 @@ namespace esb
 
 		if constexpr (is_esb_object_dual2<class_t>) {
 			IObjectPtr obj = query_interface<class_t, IObjectPtr>(*val_);
-			typename class_t::dual1_interface_t ex1 = query_interface<class_t, class_t::dual1_interface_t>(*val_);
-			typename class_t::dual2_interface_t ex2 = query_interface<class_t, class_t::dual2_interface_t>(*val_);
+			typename class_t::dual1_interface_t ex1 = query_interface<class_t, typename class_t::dual1_interface_t>(*val_);
+			typename class_t::dual2_interface_t ex2 = query_interface<class_t, typename class_t::dual2_interface_t>(*val_);
 			return EsbClassT{ std::move(val_), std::move(obj), std::move(ex1), std::move(ex2) };
 		}
 		else if constexpr (is_esb_object_dual<class_t>) {
 			IObjectPtr obj = query_interface<class_t, IObjectPtr>(*val_);
-			typename class_t::dual_interface_t ext = query_interface<class_t, class_t::dual_interface_t>(*val_);
+			typename class_t::dual_interface_t ext = query_interface<class_t, typename class_t::dual_interface_t>(*val_);
 			return EsbClassT{ std::move(val_), std::move(obj), std::move(ext) };
 		}
 		else if constexpr (is_esb_object_simple<class_t>) {
@@ -995,10 +1070,10 @@ namespace esb
 			return EsbClassT{ std::move(val_), std::move(obj) };
 		}
 		else if constexpr (is_esb_value_dual<class_t>) {
-			typename class_t::dual_interface_t ext = query_interface<class_t, class_t::dual_interface_t>(*val_);
+			typename class_t::dual_interface_t ext = query_interface<class_t, typename class_t::dual_interface_t>(*val_);
 			return EsbClassT{ std::move(val_), std::move(ext) };
 		}
-		else { //simple value or ClassMix - ClassMix просто унаследован от Value
+		else { //simple Value or OneOfValue( OneOfValue просто унаследован от Value )
 			static_assert(is_esb_value_simple<class_t>);
 			return EsbClassT{ std::move(val_) };
 		}
@@ -1038,7 +1113,7 @@ namespace esb
 			using ixx_t = typename class_t::dual_interface_t;
 			return EsbClassT{ std::move(val), QRY_IPTR(ixx_t) };
 		}
-		else { //simple value or ClassMix - ClassMix просто унаследован от Value
+		else { //simple Value or OneOfValue( OneOfValue просто унаследован от Value )
 			static_assert(is_esb_value_simple<class_t>);
 			return EsbClassT{ std::move(val) };
 		}
@@ -1057,7 +1132,7 @@ namespace esb
 
 #define ESB_CLASS_IMPLEMENT_MAKE(CLASS_, BASE_)						\
 	using base_t = BASE_;											\
-	friend CLASS_ make<CLASS_>(IValuePtr&&);
+	friend CLASS_ esb::make<CLASS_>(IValuePtr&&);
 
 #define ESB_CLASS_IMPLEMENT_MAKE_VAL(CLASS_)					\
 	ESB_CLASS_IMPLEMENT_MAKE(CLASS_, Value)						\
@@ -1106,14 +1181,14 @@ namespace esb
 		}
 	};
 	template<class... EsbClassesT>
-	struct interface_checker<ClassMix<EsbClassesT...>> {
+	struct interface_checker<OneOfValue<EsbClassesT...>> {
 		static bool check(IValue& value_) {
 			IType* pt = IValue_GetType(value_);
 			ESB_ASSERT(pt);
 			return check(*pt);
 		}
 		static bool check(IType& value_type_) {
-			//NOTE	Внутри ClassMix<> могут быть еще ClassMix<> - н.р. ClassMix<Numeric, ClassMix<String, Undef>>, поэтому мы рекурсивно "углубляемся" в список типов 
+			//NOTE	Внутри OneOfValue<> могут быть еще OneOfValue<> - н.р. OneOfValue<Numeric, OneOfValue<String, Undef>>, поэтому мы рекурсивно "углубляемся" в список типов 
 			return (interface_checker<EsbClassesT>::check(value_type_) || ...);
 		}
 	};
@@ -1230,13 +1305,22 @@ namespace esb {
 
 
 	template<class EsbClassT>
-	class Var;
+	class VarByVal;
+//NOTE	Для "удобства и совместимости взад" определяем простой псевдоним Var на VarByVal
+//		НО! Необходимо помнить, что этот "Перем" непосредстванно из 1С как in-out параметр метода изменить НЕЛЬЗЯ.
+//		В in-out параметр его можно передавать фызовом функции ByRef(..), которая сделает ему обертку.
+//		(то есть некоторая лишняя работа)
+//NOTE	Непосредственно для сценария "выходного параметра" сделан класс VarByRef, который сразу "обертку" несет на себе.
+//		(то есть некоторая лишняя память)
+//
+	template<class EsbClassT>
+	using Var = VarByVal<EsbClassT>;
 #if defined(ESB_USE_RUSSIAN) && ESB_USE_RUSSIAN
 	template<class EsbClassT>	
-	using Перем = Var<EsbClassT>;
+	using Перем = VarByVal<EsbClassT>;
 #endif
 	template<class EsbClassT>
-	struct template_argument_type<Var<EsbClassT>> { using type = EsbClassT; };
+	struct template_argument_type<VarByVal<EsbClassT>> { using type = EsbClassT; };
 
 
 	template<class T>
@@ -1467,13 +1551,63 @@ ESB_WARNING_RESTORE()	//ESB_WARN_NO_OPERATOR_ASSIGN_ANY ESB_WARN_NO_DEFAULT_CTOR
 	}
 
 
+	//NOTE  Нам нужен класс-валюе, но с возможностью изменения значения из платформы
+	//      Обычно мы создаем прокси-объект позволяющий изменить наше валюе методом ByRef(..) временным на время вызова
+	//      НО иногда не целесообразно создавать каждый раз на каждый вызов
+	// 
+	//TODO  Теоретически данной функциональностью-два-в-одном должен обладать наш class Var
+	//      НО! он унаследован от VarArgumentByValOnThisImpl 
+	//      - т.е. он ByVal (т.е. конст в терминах с++), т.е. его как-бы нельзя менять из 1С ..
+	//      имплементация VariableByValOnThis в esbhlp делает ESL_THROW_UNEXPECTED_VARIABLE_SET_VALUE при попытке изменения значения из 1С
+	//      ("мы ни при каких условиях не должны менять валюе которое нам доверили")
+	//      А!
+	//      никакого VariableByRefOnThis вообще нету ни в esbhlp, ни в ЕСБ
+	//      у нас есть только VariableByRefOnThatIgnore (который тихо глотает попытку изменения)
+	//      и VariableByRefOnThatAssign, который изменение делает
+	//      НО! Они ByRef - т.е. для них Value должно "лежать-где-то-по-указателю", а не собственно в той-же структуре, как сделано для в VarArgumentByValOnThisImpl
+	//      то есть нету у нас VarInOut (VarByRef, т.п.), а наше Var это фактически VarByVal
+	//      НУЖНО РАЗОБРАТЬСЯ..
+	//          1) в esbhlp сделать VariableByRefOnThis
+	//          2) Var переименовать в VarByVal
+	//          3) сделать еще VarByRef, который можно менять из 1С
+	//          4) а просто Var сделать алаисом на VarByVal или VarByRef или не делать вообще..
+	//              сложно предугадать какое поведение "вызовет наименьшее удивление"..
+	//              кто хочет маожет сам юзинг сделать..
+	// 
+	//NOTE  Эта реализация временная, пока нет реализации в esbhlp. она несколько не эффективна
+	//
+	template<class EsbClassTy>
+	class VarByRef : public EsbClassTy, public VarArgumentByRefOnThatAssign<EsbClassTy>
+	{
+		static_assert(is_esb_value_based<EsbClassTy>, "EsbClassT must be Value-based class!");
+	public:
+		// мы должны уметь создаваться также как и EsbClassT
+		template<typename... ArgsT>
+			requires std::is_constructible_v<EsbClassTy, ArgsT...>
+		VarByRef(ArgsT&&... args_) throw() : EsbClassTy{ std::forward<ArgsT>(args_)... }, VarArgumentByRefOnThatAssign<EsbClassTy>{ static_cast<Value&>(*this) }
+		{}
+	public:
+		operator IVariableByRef<Arbitrary>& ()& {
+			IVariable* pv = static_cast<IVariable*>(this);
+			return *static_cast<IVariableByRef<Arbitrary>*>(pv);
+		}
+		operator const IVariableByRef<Arbitrary>& () const& {
+			const IVariable* pc = static_cast<const IVariable*>(this);
+			return *static_cast<const IVariableByRef<Arbitrary>*>(pc);
+		}
+		// К && мы не преобразовываемся. Это не требуется, или требует изучения.
+		operator IVariableByRef<Arbitrary>& () && = delete;
+	};
+
+
+
 // Компилятор предупреждает, что this переданный в конструктор базового класса сырой, неинициализированный, и любая попытка использовать его чтобы что-то
 // получить выдаст мусор. Это так и есть, но мы используем этот this для того чтобы прописать правильный vtbl. То есть это by-design нам надо. Роботает.
 // Конечно был вариант в самом базовом классе использовать его this, но как-то не получилось. Детально не разбирался.
 ESB_WARNING_SUPRESS(ESB_WARN_THIS_FOR_INIT_BASE)
 //
 	template<class EsbClassT>
-	class Var : public VarArgumentByValOnThisImpl<Var<EsbClassT>>, public EsbClassT {
+	class VarByVal : public VarArgumentByValOnThisImpl<VarByVal<EsbClassT>>, public EsbClassT {
 		static_assert(is_esb_value_based<EsbClassT>, "EsbClassT must be Value-based class!");
 		// любой EsbClass имеет операторы преобразования к byval-аргументу своего типа и byval-аргументу типа Arbitrary
 		// мы их скрываем из публичного интерфейса дабы использовалось прямое преобразование из базового класса без промежуточных объектов
@@ -1483,7 +1617,7 @@ ESB_WARNING_SUPRESS(ESB_WARN_THIS_FOR_INIT_BASE)
 		// мы должны уметь создаваться также как и EsbClassT
 		template<typename... ArgsT>	
 		requires std::is_constructible_v<EsbClassT, ArgsT...>
-		Var(ArgsT... args_) throw() : VarArgumentByValOnThisImpl<Var<EsbClassT>>{*this}, EsbClassT{ std::forward<ArgsT>(args_)... }
+		VarByVal(ArgsT... args_) throw() : VarArgumentByValOnThisImpl<VarByVal<EsbClassT>>{*this}, EsbClassT{ std::forward<ArgsT>(args_)... }
 		{}
 	public:
 		// Имплементация VarArgumentByValOnThisImpl такова, что позволяет нам (поскольку мы унаследованы от Value-based класса) представляться 
@@ -1504,22 +1638,22 @@ ESB_WARNING_SUPRESS(ESB_WARN_THIS_FOR_INIT_BASE)
 	//Var<Arbitrary> требует другой имплементации: 
 	//using EsbClassT::ESB_ARGBYVAL_OPERATOR(EsbClassT) дает дублирование декларации и operator IVariableByVal<const Arbitrary>& не нужен.
 	template<>
-	class Var<Arbitrary> : public VarArgumentByValOnThisImpl<Var<Arbitrary>>, public Arbitrary {
+	class VarByVal<Arbitrary> : public VarArgumentByValOnThisImpl<VarByVal<Arbitrary>>, public Arbitrary {
 		using Arbitrary::Value::ESB_ARGBYVAL_OPERATOR(Arbitrary);
 	public:
 		// для удобства создания Var<Arbitrary> для работы с платформой пусть будут конструкторы от Undef и пустой тоже Undef (имплементация после Undef)
-		Var(const Undef&) throw();
-		Var() throw();
+		VarByVal(const Undef&) throw();
+		VarByVal() throw();
 		// ну и если начали делать свои конструкторы, то методы по-умолчанию для Arbitrary компилятор удалил :(. Восстанавливаем.
-		Var(const Arbitrary& val_) : VarArgumentByValOnThisImpl<Var<Arbitrary>>{ *this }, Arbitrary{ val_ } 		{}
-		Var(Arbitrary&& val_) : VarArgumentByValOnThisImpl<Var<Arbitrary>>{ *this }, Arbitrary{ std::move(val_) }	{}
-		Var<Arbitrary>& operator= (const Arbitrary& other_)	{ static_cast<Arbitrary&>(*this) = other_;				return *this; }
-		Var<Arbitrary>& operator= (Arbitrary&& other_)		{ static_cast<Arbitrary&>(*this) = std::move(other_);	return *this; }
+		VarByVal(const Arbitrary& val_) : VarArgumentByValOnThisImpl<VarByVal<Arbitrary>>{ *this }, Arbitrary{ val_ } 		{}
+		VarByVal(Arbitrary&& val_) : VarArgumentByValOnThisImpl<VarByVal<Arbitrary>>{ *this }, Arbitrary{ std::move(val_) }	{}
+		VarByVal<Arbitrary>& operator= (const Arbitrary& other_)	{ static_cast<Arbitrary&>(*this) = other_;				return *this; }
+		VarByVal<Arbitrary>& operator= (Arbitrary&& other_)		{ static_cast<Arbitrary&>(*this) = std::move(other_);	return *this; }
 		
 		template<class EsbClassT>
-		Var(const EsbClassT& val_) : Var(static_cast<const Arbitrary&>(val_)) {}
+		VarByVal(const EsbClassT& val_) : VarByVal(static_cast<const Arbitrary&>(val_)) {}
 		template<class EsbClassT>
-		Var(EsbClassT&& val_) : Var( static_cast<Arbitrary&&>(std::move(val_)) ) {}
+		VarByVal(EsbClassT&& val_) : VarByVal( static_cast<Arbitrary&&>(std::move(val_)) ) {}
 	};
 //
 ESB_WARNING_RESTORE()	//ESB_WARN_THIS_FOR_INIT_BASE
@@ -1531,13 +1665,18 @@ ESB_WARNING_RESTORE()	//ESB_WARN_THIS_FOR_INIT_BASE
 		static VarArgumentByRefOnThatAssign<EsbClassT> make(EsbClassT& it) { return VarArgumentByRefOnThatAssign<EsbClassT>{ it }; }
 	};
 	template<class EsbClassT>
-	struct ByRefMaker<Var<EsbClassT>> {	// специализацию нужно делать ПОСЛЕ определения Var!! а то не видит
+	struct ByRefMaker<VarByVal<EsbClassT>> {	// специализацию нужно делать ПОСЛЕ определения Var!! а то не видит
 		using argument_t = VarArgumentByRefOnThatAssign<EsbClassT>;
 		static VarArgumentByRefOnThatAssign<EsbClassT> make(EsbClassT& it) { return VarArgumentByRefOnThatAssign<EsbClassT>{ it }; }
 	};
 	template<class EsbClassT>
-	ByRefMaker<EsbClassT>::argument_t ByRef(EsbClassT& it) {
-		return ByRefMaker<EsbClassT>::make(it);
+	struct ByRefMaker<VarByRef<EsbClassT>> {	// специализацию нужно делать ПОСЛЕ определения Var!! а то не видит
+		using argument_t = const IVariableByRef<EsbClassT>&;
+		static argument_t make(const IVariableByRef<EsbClassT>& it) { return it ; }
+	};
+	template<class EsbClassT>
+	ByRefMaker<std::remove_cvref_t<EsbClassT>>::argument_t ByRef(EsbClassT& it) {
+		return ByRefMaker<std::remove_cvref_t<EsbClassT>>::make(it);
 	}
 
 
@@ -1569,8 +1708,8 @@ ESB_WARNING_RESTORE()	//ESB_WARN_THIS_FOR_INIT_BASE
 		static const VarArgumentByValOnThat<const T> forward(const T& t)					{ return static_cast<const VarArgumentByValOnThat<const T>>(t); }
 	};
 	template<class T>
-	struct forward_as_arg_t<Var<T>> {		//VarArgumentByValOnThis
-		static const IVariableByVal<const T>& forward(const Var<T>& t)						{ return t; }	/*implicit cast to base*/
+	struct forward_as_arg_t<VarByVal<T>> {		//VarArgumentByValOnThis
+		static const IVariableByVal<const T>& forward(const VarByVal<T>& t)						{ return t; }	/*implicit cast to base*/
 	};
 	template<class T>
 	struct forward_as_arg_t<VarArgumentByRefOnThatAssign<T>> {
@@ -1586,6 +1725,80 @@ ESB_WARNING_RESTORE()	//ESB_WARN_THIS_FOR_INIT_BASE
 	auto forward_as_arg(const T& t) {
 		return forward_as_arg_t<std::remove_cvref_t<T>>::forward(t);
 	}
+
+	// в конце концов у нас все уходит в using argarray_t = std::initializer_list<const IVariable*>;
+	// для того чтобы сделать const IVariable* мы промежуточно принимаем const IVariable&
+	// const IVariable& можно получить и из любого IVariableByRef\IVariableByVal конст или не-конст - к конст привяжется все
+	// 
+	//forward_as_platform_argument
+	// 1) если класс унаследован от IVariableByRef<EsbClassT>, то мы его должны скастить к ссылке IVariableByRef<EsbClassT>&
+	//		здесь EsbClassT не может быть конст! - его из платформы изменить могут!
+	//		- только если VarArgumentByRefOnThatAssign
+	//		- а если от VarArgumentByRefOnThatIgnore, то может быть и конст - изменения игнорируются в esbhlp
+	//		- !!! А VarArgumentByRefOnThis у меня пока нету !!!
+	// 
+	// 2) если класс унаследован от IVariableByVal<const T>, то мы его должны кастить к ссылке IVariableByVal<const T>&
+	// VarArgumentByValOnThisImpl
+	// VarArgumentByValOnThatImpl
+	// все реализации бросают исключение при попытке изменить из 1С
+	//		- также если и не конст - IVariableByVal<T> мы можем его скастить к ссылке IVariableByVal<T>&
+	//			это означает, что здесь в с++ это не-конст, но для 1С считается конст
+	// 3) если класс прямо не унаследован ни от одного ни от другого, то считаем его просто-есб-классом 
+	//		у которого обязан быть оператор возвращающий временный VarArgumentByValOnThat
+	//		и этот VarArgumentByValOnThat нужно вернуть прямо по значению, а не по ссылке	
+
+	//template<typename T>
+	//const VarArgumentByValOnThat<const std::remove_cvref_t<T>> forward_as_platform_argument(T&& x)
+	//{
+	//	return static_cast<const VarArgumentByValOnThat<const std::remove_cvref_t<T>>>(x);
+	//}
+	//template<typename T>
+	//requires (std::is_base_of_v<VarArgumentByRefOnThatAssign<T>, T> || std::is_base_of_v<VarArgumentByRefOnThatIgnore<T>, T>)
+	//decltype(auto) forward_as_platform_argument(T& x)
+	//{
+	//	return static_cast<IVariableByRef<T>&>(x);
+	//}
+	//template<typename T>
+	//	requires (std::is_base_of_v<VarArgumentByValOnThisImpl<T>, T> || std::is_base_of_v<VarArgumentByValOnThatImpl<T>, T>)
+	//decltype(auto) forward_as_platform_argument(T& x)
+	//{
+	//	return static_cast<IVariableByVal<T>&>(x);
+	//}
+
+	template<typename T>
+	struct converter_for_platform_invoke 
+	{
+		static const VarArgumentByValOnThat<const std::remove_cvref_t<T>> convert(const T& x) { return static_cast<const VarArgumentByValOnThat<const std::remove_cvref_t<T>>>(x); }
+	};
+	template<typename T>
+	struct converter_for_platform_invoke<VarByRef<T>> 
+	{
+		//static const IVariableByRef<T>& convert(IVariableByRef<T>& x)		{ return x; }
+		static const IVariableByRef<T>& convert(const IVariableByRef<T>& x) { return x; }
+	};
+	template<typename T>
+	struct converter_for_platform_invoke<IVariableByRef<T>>
+	{
+		static const IVariableByRef<T>& convert(const IVariableByRef<T>& x) { return x; }
+	};
+	template<typename T>
+	struct converter_for_platform_invoke<VarByVal<T>>
+	{
+		static const IVariableByVal<const T>& convert(const IVariableByVal<const T>& x) { return x; }
+	};
+	template<typename T>
+	struct converter_for_platform_invoke<IVariableByVal<const T>>
+	{
+		static const IVariableByVal<const T>& convert(const IVariableByVal<const T>& x) { return x; }
+	};
+	//
+	template<typename T>
+	decltype(auto) convert_for_platform_invoke(T&& x) 
+	{
+		return converter_for_platform_invoke<std::remove_cvref_t<T>>::convert(x);
+	}
+
+
 } // namespace esb
 
 
@@ -2231,6 +2444,14 @@ namespace esb	// String. Дескриптор зависит от String поэ�
 		ESB_EXPLICIT_STRING
 		String(const strview_t& val_) throw() : Value(create_string_value(val_))
 		{}
+		//TODO	Это вполне допустимое конструирование String из одного символа
+		//		(конструктор String отталкивается именно от длины, а не от наличия завершающего 0)
+		//		НО! Каким-то образом "это" начинает конфликтовать с преобразованием double-в-строку в ext.h
+		//			Надо там порядок наводить...
+		//		А пока в stl_string объявлен отдельно convert_to для этой цели.
+		//explicit
+		//String(char_t value_) : String(string_view_t(&value_, 1))
+		//{}
 	public:
 		const strchar_t*	c_str() const &;	// если мы rvalue, то можем уничтожиться и уничтожить c_str, поэтому возвращать указатель мы можем только если мы lvalue
 		std::size_t			length() const;
@@ -2242,7 +2463,7 @@ namespace esb	// String. Дескриптор зависит от String поэ�
 		int					compare(const String& other_) const;
 		bool operator==(const String& other_) const		{ return (Value::operator==(other_))? true : (compare(other_) == 0); }
 		bool operator<(const String& other_) const		{ return (Value::operator==(other_))? false : (compare(other_) < 0); }
-		bool operator>(const String& other_) const		{ return (Value::operator==(other_)) ? false : (compare(other_) > 0); }
+		bool operator>(const String& other_) const		{ return (Value::operator==(other_))? false : (compare(other_) > 0); }
 	};
 #if defined(ESB_USE_RUSSIAN) && ESB_USE_RUSSIAN
 	using Строка = String;
@@ -2271,6 +2492,41 @@ namespace esb	// disp support
 		inline IEntityPtr query_entity_handler(IValue& value_) {
 			return { static_cast<IUnknown&>(value_) };
 		}
+
+
+
+		//TODO	Нехорошо получается!
+		//		У структуры DispInfoMembProp поле DispInvokeMembPropGetFn описано как void(const ExValueBase&, IVariable&)
+		//		то есть к нам приходит const obj_base_, и соответственно мы не можем сделать новый IValuePtr на основе константы
+		//		Поэтому мы здесь тихо снимаем константность с obj_base_ чтобы сделать новый IValuePtr
+		//		А это НЕКОРРЕКТНО, т.к. в esbhlp компилятор может рассчитывать на то, что refcounter у ExValueBase не поменяется в процессе вызова
+		//TODO	Нужно менять декларацию DispInvokeMembPropGetFn и перекомпилировать esbhlp
+		//
+
+
+//TODO	Нужно как-то к одному знаменателю привести..
+#define ESB_OWNER_HANDLER_T	esb::_internal::IEntityPtr
+//NOTE	eswig емитит ESB_THIS_ENTITY_HANDLER_
+#define ESB_THIS_ENTITY_HANDLER_	ESB_OWNER_HANDLER_T&& this_entity_handler_
+#define ESB_MOVE_ENTITY_HANDLER_	std::move(this_entity_handler_)
+
+
+		template<typename ExtValueTy>
+		ESB_OWNER_HANDLER_T query_owner_handler(ExtValueTy& obj_)
+		{
+			return query_entity_handler( static_cast<IValue&>(obj_) );
+		}
+		//
+		template<typename ExtValueTy>
+		ESB_OWNER_HANDLER_T query_owner_handler(ExValueBase& obj_base_)
+		{
+			return query_owner_handler(static_cast<ExtValueTy&>(obj_base_));
+		}
+		//template<typename ExtValueTy>
+		//ESB_OWNER_HANDLER_T query_owner_handler(const ExValueBase& obj_base_)
+		//{
+		//	return query_owner_handler<ExtValueTy>(const_cast<ExValueBase&>(obj_base_));
+		//}
 
 
 		// все классы построения дисп-интерфейса не предполагают наличие конструкторов по умолчанию. Но мы не можем явно в них показать =delete
@@ -2324,13 +2580,13 @@ namespace esb	// disp support
 		//struct ExtValueObjectBase;
 		//using ExtValueObjectBase = _internal::ExValueBase;
 
-		using DispInvokeMembMethFn = void(ExValueBase&, IVariable*, const argpack_t&);
-		using DispInvokeMembPropGetFn = void(const ExValueBase&, IVariable&);
-		using DispInvokeMembPropSetFn = void(ExValueBase&, const IVariable&);
+		using DispInvokeMembMethFn		= void(ExValueBase&, IVariable*, const argpack_t&);
+		using DispInvokeMembPropGetFn	= void(const ExValueBase&, IVariable&);
+		using DispInvokeMembPropSetFn	= void(ExValueBase&, const IVariable&);
 
-		using DispInvokeStatMethFn = void(IVariable*, const argpack_t&);
-		using DispInvokeStatPropGetFn = void(IVariable&);
-		using DispInvokeStatPropSetFn = void(const IVariable&);
+		using DispInvokeStatMethFn		= void(IVariable*, const argpack_t&);
+		using DispInvokeStatPropGetFn	= void(IVariable&);
+		using DispInvokeStatPropSetFn	= void(const IVariable&);
 
 
 
@@ -2721,6 +2977,14 @@ namespace esb
 		};
 
 
+// многие методы автоматического конвертирования и поддержки интерфейсов полагаются, 
+// что доступ к содержащимся в враппере данным осуществляется посредством метода с этим именем
+#define ESB_CONTAINED_DATA					Data
+
+// также для семантической красоты и удобства в классе-враппере должен быть определен псевдоним типа этих данных
+#define ESB_CONTAINED_DATA_T				DataType
+
+
 		template<typename ExDataT, typename ExTypeInfoForT>
 		struct ExEntityFor;
 		//
@@ -2997,8 +3261,8 @@ namespace esb // DelagatToMeth support
 			return static_cast<const ext_value_t&>(static_cast<const IValue&>( *get_interface(*this) )); 
 		}
 		//
-		template<class RetT, ArgConcept... ArgsT> 
-		RetT invoke_impl(const ArgsT&... args_) const			{
+		template<class RetT, typename... ArgsT>
+		RetT invoke_impl(const ArgsT&... args_) const {
 			if constexpr (std::is_same_v<RetT, void>)
 				return me().InvokeAsProc({ &args_ ... });
 			else
@@ -3020,14 +3284,73 @@ namespace esb // DelagatToMeth support
 		}
 #endif //#if ESB_USE_OBJECT_DISPATCH_FIND_STRVIEW_HACK
 	protected:
-		//INFO	Метод не публичный чтобы навязать использование какого-то конкретного класса-наследника в котором Invoke определен с конкретной необходимой сигнаурой. 
+		//INFO	Методы не публичный чтобы навязать использование какого-то конкретного класса-наследника в котором Invoke-и определены с конкретной необходимой сигнаурой. 
 		//		К примеру для предиката сортировки чисел что-то типа:
 		//		class ComparatorForNumeric : public DelegatToMeth { bool operator()(const Numeric&, const Numeric&) { return DelegatToMeth::Invoke(...);  }  };
+		//		"RefPara<Arbitrary> data_, ConstParam<String> string_" - как в декларациях методов платформы
+		//
 		template<class RetT, class... ArgsT>
-		RetT Invoke(const ArgsT&... args_) const {
-			return invoke_impl<RetT>(forward_as_arg(args_) ...);
+		RetT Invoke(ArgsT&&... args_) const {
+			return invoke_impl<RetT>(convert_for_platform_invoke(args_) ...);
+		}
+		template<class RetT, class... ArgsT>
+		void InvokeProc(ArgsT&&... args_) const {
+			return invoke_impl<void>(convert_for_platform_invoke(args_) ...);
+		}
+		template<class RetT, class... ArgsT>
+		RetT InvokeFunc(ArgsT&&... args_) const {
+			static_assert(not std::is_same_v<RetT, void>, "InvokeFunc expected real return type.");
+			return invoke_impl<RetT>(convert_for_platform_invoke(args_) ...);
 		}
 	};
+	
+	// Ну и сразу чтобы два раза не вставать..
+	class DelegatToMethPavlic : public DelegatToMeth
+	{
+	public:
+		DelegatToMethPavlic(const Object& object_, const String& meth_) : DelegatToMeth{ DelegatToMeth::Create(object_, meth_) }
+		{ }
+	public:
+		using DelegatToMeth::Invoke;
+		using DelegatToMeth::InvokeFunc;
+		using DelegatToMeth::InvokeProc;
+	};
+
+	//TODO	Нужно до вызов с несколькими аргументами (без аргументов) доделать
+	//		и лучше наследоваться т.к. могут быть empty-base
+	template<typename InvocableBaseTy, typename DataTy>
+	class DelegatToMethData
+	{
+		InvocableBaseTy m_base;
+		DataTy          m_data;
+	public:
+		template<typename... InvocableBaseArgsTs>
+		DelegatToMethData(DataTy&& data_, InvocableBaseArgsTs&&... base_args_)
+			: m_data{ std::move(data_) }, m_base{ std::forward<InvocableBaseArgsTs>(base_args_) ...}
+		{ }
+		//
+		template<class RetTy, class... ArgsTs>
+		RetTy Invoke(ArgsTs&&... args_) const {
+			return m_base.Invoke<RetTy>(m_data, std::forward<ArgsTs>(args_) ...);
+		}
+	};
+
+	template<typename InvocableBaseTy, typename ArgTy, typename ConvertTy>
+	class DelegatToMethConv
+	{
+		InvocableBaseTy m_base;
+	public:
+		template<typename... InvocableBaseArgsTs>
+		DelegatToMethConv(InvocableBaseArgsTs&&... base_args_)
+			: m_base{ std::forward<InvocableBaseArgsTs>(base_args_) ...}
+		{ }
+		//
+		template<class RetTy>
+		RetTy Invoke(ArgTy arg_) const {
+			return m_base.Invoke<RetTy>(convert_to_ret<ConvertTy>(arg_));
+		}
+	};
+
 
 }// namespace esb // DelagatToMeth support
 ESB_WARNING_RESTORE()	//ESB_WARNING_SUPRESS_NO_VIRTUAL_DTOR_ANY

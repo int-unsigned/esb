@@ -66,6 +66,21 @@ namespace afx
 	static_assert(x_test_tuple_flt2_size == 3);
 	///////////////////////////////////
 #endif
+
+
+	template<typename ItemTy, template<typename...> typename Pred, typename... PredArgs>
+	constexpr auto make_tuple_if_elem(ItemTy&& item_) {
+		if constexpr (Pred<ItemTy, PredArgs...>::value)
+			return std::make_tuple(std::move(item_));
+		else
+			return std::make_tuple();
+	}
+	//
+	template<template<typename...> typename Pred, typename... PredArgs, typename... ItemsTs>
+	constexpr auto make_tuple_if(ItemsTs&&... items_) {
+		return std::tuple_cat(make_tuple_if_elem<ItemsTs, Pred, PredArgs...>(std::move(items_)) ...);
+	}
+
 }
 
 #endif	//AFX_TUPLE_H_

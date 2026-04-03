@@ -1,0 +1,64 @@
+
+#pragma once
+
+%esb_wrap_info_cref(operations_research::sat::CpSolverResponse,	"46CE645F-3EF6-4DB2-8D33-C00D8F8B8F5B", "SolverResponseCRef",	"ќтвет–ешател€ онст—сылка",		"");
+%esb_wrap_as_val(	operations_research::sat::CpSolverResponse,	"3E368DF2-F48B-4432-8098-C20AAC07C1A2", "SolverResponse",     	"ќтвет–ешател€",     			"ќбъект —атќтвет–ешател€");
+//
+//
+//NOTE	¬ ќр“улс определены фрии-функции дл€ получени€ значений из ответа решател€ (CpSolverResponse)
+//		SolutionIntegerValue и SolutionBooleanValue
+//		ќни принимают первым параметом сам CpSolverResponse и фактически имеют смысл только в контексте ответа решател€
+//		—деланы они фрии видимо только потому, что CpSolverResponse это прото-класс и разработчиками 
+//		нужно было его упростить и отв€зать от типов operations_research::sat::**
+//		ƒл€ нас целесообразнее и красивше сделать их методами самого нашего SolverResponse
+//		и игнорировать их как фрии-функции
+//
+%extend operations_research::sat::CpSolverResponse {
+	//«начениеѕеремЅулево
+	Boolean ValueOfBooleanVariable(const BooleanVariable& variable_) const
+	{
+		return convert_to_ret<Boolean>(::operations_research::sat::SolutionBooleanValue(_, convert_to_arg<const ::operations_research::sat::BoolVar&>(variable_)));
+	}
+	//«начениеЋинейного¬ыражени€
+	Numeric ValueOfLinearExprssion(const IntegerLinearExpr& expr_) const
+	{
+		return convert_to_ret<Numeric>(::operations_research::sat::SolutionIntegerValue(_, convert_to_arg<const ::operations_research::sat::LinearExpr&>(expr_)));
+	}
+	//TODO	ѕоскольку IntegerVariable у нас может добавл€тьс€ в массив (с++ вектор-враппер), 
+	//		то нам необходимо (оч.желательно) делать ..Ref и ..CRef варианты дл€ объекта, 
+	//		т.к. методы доступа к содержимому контейнера (Get, [], т.п.) возвращают ссылку (дл€ конст-вектора const-ссылку (итератор))
+	//		—ќќ“¬≈“—“¬≈ЌЌќ, там где јѕ» с++ ожидает "const IntVar&" у нас целых три объекта из которых этот "const IntVar&" можно получить
+	//		ƒл€ этого в есб-интерфейсе данный параметр так и нужно декларировать - OneOf<IntegerVariable, IntegerVariableRef, IntegerVariableCRef>
+	//		TODO в том, что здесь это сделано ручками, а задача вполне алгоримизуема дл€ ESwig 
+	//			- посмотреть что дл€ IntVar объ€вл€етс€ 2(3,4) варианта и там где IntVar принимаетс€ аргументом автоматически делать OneOf<>
+	//
+	//«начениеѕерем÷елое	
+	Numeric ValueOfIntegerVariable(const OneOf<IntegerVariable, IntegerVariableRef, IntegerVariableCRef>& variable_) const
+	{
+		//NOTE  «десь после convert_to_arg_<> имплисит создаетс€ LinearExpr, как и должно быть 
+		//		т.к. ::SolutionIntegerValue определен от LinearExpr, а у LinearExpr есть открытый конструктор от IntVar		
+		return convert_to_ret<Numeric>(::operations_research::sat::SolutionIntegerValue(_, convert_to_arg<const operations_research::sat::IntVar&>(variable_)));
+	}
+}
+//
+%esb_name_local("«начениеѕеремЅулево")						operations_research::sat::CpSolverResponse::ValueOfBooleanVariable;
+%esb_name_local("«начениеѕерем÷елое")						operations_research::sat::CpSolverResponse::ValueOfIntegerVariable;
+%esb_name_local("«начениеЋинейного¬ыражени€")				operations_research::sat::CpSolverResponse::ValueOfLinearExprssion;
+//
+%esb_prop(operations_research::sat::CpSolverResponse::wall_time, "WAllTime");
+%esb_name_local_prop_ro("¬рем€–ешени€", "¬рем€–ешени€")		operations_research::sat::CpSolverResponse::wall_time;
+//%rename(GetWallTime)	operations_research::sat::CpSolverResponse::wall_time;
+//
+namespace operations_research::sat
+{
+	class CpSolverResponse 
+	{
+		public:
+//NOTE  .wall_time() возвращает double. ” Numeric есть конструктор от double, хот€, видимо, double представл€етс€ в Numeric с ограничени€ми.
+//      ƒумаю что в этом контексте это не важно и не будем делать свой Double-Wrapper. »ли будем.. хз..
+		double wall_time() const;
+	};
+}
+// *** end of cp_model.pb.h ***
+
+

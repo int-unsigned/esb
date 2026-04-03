@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36221.1 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nqueens", "nqueens.vcxproj", "{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		v8309Debug|x64 = v8309Debug|x64
+		v8309Debug|x86 = v8309Debug|x86
+		v8309Release|x64 = v8309Release|x64
+		v8309Release|x86 = v8309Release|x86
+		v8323Debug|x64 = v8323Debug|x64
+		v8323Debug|x86 = v8323Debug|x86
+		v8323Release|x64 = v8323Release|x64
+		v8323Release|x86 = v8323Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8309Debug|x64.ActiveCfg = v8309Debug|x64
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8309Debug|x64.Build.0 = v8309Debug|x64
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8309Debug|x86.ActiveCfg = v8309Debug|Win32
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8309Debug|x86.Build.0 = v8309Debug|Win32
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8309Release|x64.ActiveCfg = v8309Release|x64
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8309Release|x64.Build.0 = v8309Release|x64
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8309Release|x86.ActiveCfg = v8309Release|Win32
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8309Release|x86.Build.0 = v8309Release|Win32
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8323Debug|x64.ActiveCfg = v8323Debug|x64
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8323Debug|x64.Build.0 = v8323Debug|x64
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8323Debug|x86.ActiveCfg = v8323Debug|Win32
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8323Debug|x86.Build.0 = v8323Debug|Win32
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8323Release|x64.ActiveCfg = v8323Release|x64
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8323Release|x64.Build.0 = v8323Release|x64
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8323Release|x86.ActiveCfg = v8323Release|Win32
+		{FA77FC7B-747E-47D7-8273-AEBBFA3F85D6}.v8323Release|x86.Build.0 = v8323Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {97B052B7-F766-49BE-AC68-C611D322E39B}
+	EndGlobalSection
+EndGlobal

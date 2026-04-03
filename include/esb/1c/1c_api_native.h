@@ -28,7 +28,7 @@ namespace esb
 	inline Boolean ToBoolean(const EsbClassT& Value_) {
 		if constexpr (std::is_same_v<std::remove_cvref_t<EsbClassT>, Numeric>)
 			return (static_cast<int>(Value_))? Boolean::True_ : Boolean::False_;
-		else if constexpr (has_meth_ToBoolean<EsbClassT>)
+		else if constexpr (esb::_internal::has_meth_ToBoolean<EsbClassT>)
 			return Value_.ESB_CONVERTER_METH_ToBoolean();
 		else {
 			IValuePtr pv = IValue_ToBoolean(*get_interface(Value_));
@@ -43,7 +43,7 @@ namespace esb
 	inline Numeric ToNumeric(const EsbClassT& Value_) {
 		if constexpr (std::is_same_v<std::remove_cvref_t<EsbClassT>, Boolean>)
 			return (static_cast<bool>(Value_))? Numeric::Value_1_ : Numeric::Value_0_;
-		else if constexpr (has_meth_ToNumeric<EsbClassT>)
+		else if constexpr (esb::_internal::has_meth_ToNumeric<EsbClassT>)
 			return Value_.ESB_CONVERTER_METH_ToNumeric();
 		else {
 			//Значение типа Строка преобразуется в число в том случае, если параметр является строковым представлением литерала численного типа.
@@ -70,7 +70,7 @@ namespace esb
 
 	template<class EsbClassT>
 	inline String ToString(const EsbClassT& Value_) {
-		if constexpr (has_meth_ToString<EsbClassT>)
+		if constexpr (esb::_internal::has_meth_ToString<EsbClassT>)
 			return Value_.ESB_CONVERTER_METH_ToString();
 		else {
 			// Гхм... --Преобразование к строке значений остальных типов производится **по мере возможности** и 
@@ -86,7 +86,7 @@ namespace esb
 
 	template<class EsbClassT>
 	inline DateTime ToDate(const EsbClassT& Value_) {
-		if constexpr (has_meth_ToDate<EsbClassT>)
+		if constexpr (esb::_internal::has_meth_ToDate<EsbClassT>)
 			return Value_.ESB_CONVERTER_METH_ToDate();
 		else {
 			IValuePtr pv = IValue_ToDate(*get_interface(Value_));

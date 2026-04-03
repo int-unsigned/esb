@@ -84,7 +84,34 @@ namespace esb
 
 
 	ESB_CLASS_ENUM(FileAccess)
-	{	ESB_CLASS_IMPLEMENT_ENUM(FileAccess)
+	{
+		using base_t = _internal::ValueBaseForEnum; 
+		friend FileAccess make<FileAccess>(IValuePtr&&); 
+		FileAccess(IValuePtr && val_) noexcept : base_t(std::move(val_)) 
+		{ } 
+		friend esb::is_can_be_nullable_type<FileAccess>; 
+		friend esb::is_can_be_nullable_type<const FileAccess>; 
+		friend esb::ClassOpt<FileAccess>; 
+		friend esb::ClassOpt<const FileAccess>; 
+		using Value::is_null; 
+		constexpr FileAccess(nullptr_t) noexcept : base_t(nullptr) 
+		{ } 
+		using EnumId = _internal::_dispinfo::EnumIdsFor<FileAccess>; 
+		using enum_data_t = _internal::EnumValueData<FileAccess>; 
+		using enum_value_t = FileAccess; 
+		friend bool OnComponentInitStartup(); 
+		friend void OnComponentDoneCleanup(); 
+		using typedef_t = _internal::TypeDefObjectForEnum<FileAccess>; 
+		static inline const typedef_t TypeDefObject_{ nullptr }; 
+		public: 
+		static constexpr const TypeDef& Type_{ static_cast<const TypeDef&>(TypeDefObject_) }; 
+		private: 
+		static inline const RuntimeRegistratorInit on_runtime_init_{ MemberMethInvoker<&TypeDefObject_, &typedef_t::on_runtime_init>::invoke }; 
+		public: 
+		operator const VarArgumentByValOnThat<const FileAccess>() const 
+		{
+			return VarArgumentByValOnThat<const FileAccess>(*this);
+		}
 	public:
 		ESB_CLASS_ENUM_ITEM(Read, Чтение)
 		ESB_CLASS_ENUM_ITEM(Write, Запись)

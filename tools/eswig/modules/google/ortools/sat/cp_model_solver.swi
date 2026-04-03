@@ -1,0 +1,160 @@
+
+#pragma once
+
+
+
+// -------------------------------
+//
+
+
+// ** Система "коллбаков" в 1С реализуется отдельно ручками **
+// классы SolutionObserver (SatSolutionObserver) по сути плейс-холдеры для реальных классов, но с указанием реальных аттрибутов
+// SolutionObserver мы делаем/создаем сами, и хотя, он содержит ссылки на объекты 1С его можно считать val-типом поскольку у него нет шансов пережить 1С
+//%esb_wrap_as_val(SolutionObserver,  "ACE33AE9-526C-4B3E-B93C-33218CD76044", "SatSolutionObserver",     "СатНаблюдательЗаРешением",     "Объект СатНаблюдательЗаРешением");
+//class SolutionObserver
+//{};
+//ПС. Метод-креатор СоздатьНаблюдательЗаРешением Свиг создаст, но реализация его опять ручками
+//
+//feasible solution - возможное (достижимое) решение
+//std::function<void(Model*)> NewFeasibleSolutionObserver(const std::function<void(const CpSolverResponse& response)>& observer);
+// сам метод возвращающий std::function<void(Model*)> для использования в Model::
+//  template <typename T>
+//  T Add(std::function<T(Model*)> f) {    return f(this);  }
+//мы игнорим. 
+//этот вопрос решается отдельно
+//TODO	Здесь сам Свиг срабатывает некорректно и его приходится подправлять в модуле.
+//		Если сделать игнор с полной декларацией будет ворнинг. Поэтому игнорим все имя.
+//		см.примечание к swig::rename_to_ignore
+//%ignore operations_research::sat::NewFeasibleSolutionObserver(std::function< void (operations_research::sat::CpSolverResponse const &) > const &);
+%ignore operations_research::sat::NewFeasibleSolutionObserver;
+
+
+
+
+%esb_name_local("ВерсияРешателя")						operations_research::sat::CpSatSolverVersion();
+%esb_name_local("СтатистикаМодели")						operations_research::sat::CpModelStats(operations_research::sat::CpModelProto const &);
+
+/* from cp_model_solver.cc
+CpSolverResponse Solve(const CpModelProto& model_proto) {
+  Model model;
+  return SolveCpModel(model_proto, &model);
+}
+CpSolverResponse SolveWithParameters(const CpModelProto& model_proto,
+                                     const SatParameters& params) {
+  Model model;
+  model.Add(NewSatParameters(params));
+  return SolveCpModel(model_proto, &model);
+}
+CpSolverResponse SolveCpModel(const CpModelProto& model_proto, Model* model) {
+	... основной метод
+}
+*/
+//
+%esb_name_local("РешиЗадачу")							operations_research::sat::Solve;
+
+
+
+//CpSolverResponse SolveWithParameters(const CpModelProto& model_proto, const SatParameters& params);
+//CpSolverResponse SolveWithParameters(operations_research::sat::CpModelProto const &,std::string const &);
+//NOTE	Эти два перегруженных метода "разводим" по имени.
+//		Причем что основной для САТ (от SatParameters) оставляем с тем же именем, 
+//		а к тому что из std::string-JSON добавляем суффикс JSON.
+//		И для них не нужно делать универсальный SolveWithParameters от OneOf<SatParameters, String>
+//		так как из того что методу передается String никак не следует, что String должен быть в JSON-формате
+//		Это ошибка семантики Гугля. Пусть лучше метод принимающий JSON будет с суффиксом JSON
+//
+%esb_name_local("РешиЗадачуСПараметрами")				operations_research::sat::SolveWithParameters(operations_research::sat::CpModelProto const &,operations_research::sat::SatParameters const &);
+//TODO	Чтобы Swig(ESwig) "почуял" что имя метода все таки должено быть "как доктор прописал", его приходится переименовать в то же само имя...
+//		(а без переименования делает SolveWithParametersModelProto)
+//		странный эффект.. нужно разобраться
+%rename(SolveWithParameters)							operations_research::sat::SolveWithParameters(operations_research::sat::CpModelProto const &,operations_research::sat::SatParameters const &);
+//
+//TODO	мы делаем здесь convert_to_arg<std::string const &>(params_) - то есть к ссылке (как у аргумента std::string const &)
+//		НО! Преобразование String -> std::string для _arg_ допустимо, но все же не к ссылке! или к std::string const && уж тогда, хз..
+//		
+%esb_name_local("РешиЗадачуСПараметрамиJSon")			operations_research::sat::SolveWithParameters(operations_research::sat::CpModelProto const &,std::string const &);
+%rename(SolveWithParametersJSon)						operations_research::sat::SolveWithParameters(operations_research::sat::CpModelProto const &,std::string const &);
+
+
+
+//	CpSolverResponse SolveCpModel(const CpModelProto& model_proto, Model* model);
+//	void LoadAndSolveCpModelForTest(const CpModelProto& model_proto, Model* model);
+//
+// По какой-то причине эти два метода имеют парамером УКАЗАТЕЛЬ на Модель
+// хотя в реализации этот указатель используется безо всякой проверки на НУЛЛ !
+// т.е. фактически должна быть ССЫЛКА на Модель
+// В таком виде их враппить для скриптового языка просто НЕЛЬЗЯ.
+// Поэтому ИГНОРИРУЕМ и вручную делаем враппер
+//
+//TODO	"Ручной" враппер получился практически-автоматическим. Нужно Свиг рассказать..
+//%esb_name_local("РешиЗадачуПоМодели")		operations_research::sat::SolveCpModel(operations_research::sat::CpModelProto const &, operations_research::sat::Model *);
+//
+%ignore		operations_research::sat::SolveCpModel(CpModelProto const &, Model *);
+//
+%esb_inline 
+%{
+inline
+SolverResponse SolveModel(const OptimizationModelProto& model_proto_, SatModel model_)
+{
+	return 
+	convert_to_ret<SolverResponse>
+	(
+		operations_research::sat::SolveCpModel(convert_to_arg<const operations_research::sat::CpModelProto&>(model_proto_), convert_to_arg<operations_research::sat::Model*>(model_))
+	);
+}
+%}
+//TODO	Нахально всовываем %esb_inline в интерфейс модуля
+%add_to_module_interface_meth(SolveModel, "РешиЗадачуПоМодели")
+
+
+//Solves a CpModelProto without any processing. Only used for unit tests.	
+//%esb_name_local("ЗагрузиИПротестируйРешениеМодели")	operations_research::sat::LoadAndSolveCpModelForTest(operations_research::sat::CpModelProto const &, operations_research::sat::Model *);
+%ignore		operations_research::sat::LoadAndSolveCpModelForTest(CpModelProto const &, Model *);
+
+
+//std::string CpSolverResponseStats(const CpSolverResponse& response, bool has_objective = true);
+%rename(CpSolverResponseStatsWhenHasObjective)			operations_research::sat::CpSolverResponseStats(operations_research::sat::CpSolverResponse const &);
+%esb_name_local("СтатистикаРешенияПриДостиженииЦели")	operations_research::sat::CpSolverResponseStats(operations_research::sat::CpSolverResponse const &);
+%esb_name_local("СтатистикаРешения")					operations_research::sat::CpSolverResponseStats(operations_research::sat::CpSolverResponse const &, bool);
+//TODO	Вот тут интересная ситуация. Два перегруженных метода здесь сделал Свиг из /bool has_objective = true/
+//		и один из них мы ручками переименовали в ...WhenHasObjective ЧТО КСТАТИ можно попробовать делать алгоритмически в модуле
+//		но тогда получается, что наш алгоритм ЗРЯ и некрасиво переименовывает оставшуюся перегрузку
+//		в CpSolverResponseStatsResponseHasObjective
+//		НУЖНО а) доработать алгоритм обработки перегрузок, чтобы если переименованы все методы-перегрузки кроме одного 
+//				(вне зависимости от букетов по кол-ву параметров), то последний оставшийся метод не переименовывать.
+//			  б) научиться автоматом разруливать этот вариант возникновения перегруженных методов,
+//				скажем также - путем добавления суффикса ..WhenHasObjective для bool has_objective = true
+//				или в общем ..WhenParamValue для type param_ = value_, н.р. для count_=5 будет ..WhenCount5
+//				(у Свиг есть какой-то аттрибут defaultvalue)
+// А пока просто переименовываем CpSolverResponseStats в CpSolverResponseStats чтобы алгоритм метод не трогал.
+%rename(CpSolverResponseStats)							operations_research::sat::CpSolverResponseStats(operations_research::sat::CpSolverResponse const &, bool);
+
+
+
+//TODO	Его инсерт делать надо - это наш лямбда-класс (или не делать пока)
+/*
+// То же самое для SolutionLogCallback
+//%esb_guid("3FA2D0BF-88B2-4CA2-868D-726B00FF9750")   			SolutionLogCallback;
+//%esb_name_local("СатНаблюдательЖурналаРешения")     			SolutionLogCallback;
+//%esb_description_local("Объект СатНаблюдательЖурналаРешения")	SolutionLogCallback;
+%esb_wrap_as_val(SolutionLogCallback,   "3FA2D0BF-88B2-4CA2-868D-726B00FF9750", "SatSolutionLogCallback",   "СатНаблюдательЖурналаРешения",     "Объект СатНаблюдательЖурналаРешения");
+class SolutionLogCallback
+{};
+//%esb_name_local("СоздатьНаблюдательЖурналаРешения")			operations_research::sat::NewFeasibleSolutionLogCallback(std::function< std::string (operations_research::sat::CpSolverResponse const &) > const &);
+*/
+%ignore operations_research::sat::NewFeasibleSolutionLogCallback;
+
+
+//std::function<void(Model*)> NewBestBoundCallback(const std::function<void(double)>& callback);
+//Error: Meth wrapper return type not found 'std::function<(f(p.operations_research::sat::Model).void)>'. Used in meth 'NewBestBoundCallback'
+//Error: Meth wrapper parameter type not found 'r.q(const).std::function<(f(double).void)>'.      Used in meth 'NewBestBoundCallback'
+%ignore operations_research::sat::NewBestBoundCallback;
+
+
+//--------------------------------------
+%include "ortools/sat/cp_model_solver.h"
+//--------------------------------------
+
+
+
+

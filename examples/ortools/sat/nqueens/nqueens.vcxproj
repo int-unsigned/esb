@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--    Для того чтобы и msbuild и студия со страницами свойств все правильно работало .vcxproj 
+        должен иметь определенную структуру описанную здесь
+        https://learn.microsoft.com/en-us/cpp/build/reference/vcxproj-file-structure?view=msvc-170  
+-->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="v8309Debug|Win32">
+      <Configuration>v8309Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="v8309Debug|x64">
+      <Configuration>v8309Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="v8309Release|Win32">
+      <Configuration>v8309Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="v8309Release|x64">
+      <Configuration>v8309Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="v8323Debug|Win32">
+      <Configuration>v8323Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="v8323Debug|x64">
+      <Configuration>v8323Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="v8323Release|Win32">
+      <Configuration>v8323Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="v8323Release|x64">
+      <Configuration>v8323Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <!--    Обязательный блок (иначи студия и MSBuild не знают какой тулсет подключать) -->
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{fa77fc7b-747e-47d7-8273-aebbfa3f85d6}</ProjectGuid>
+    <RootNamespace>esbtemplate</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <!--    Настройки для отладчика сохраняются в .vcxproj.user файл, но мастер шаблонов студии не копирует .vcxproj.user файл 
+	.vcxproj.user файл подключается в 
+	Microsoft.Common.targets импортирует...
+		...\Microsoft Visual Studio\...\MSBuild\Current\Bin\Microsoft.Common.CurrentVersion.targets и там...
+			...<Import Project="$(MSBuildProjectFullPath).user" Condition="Exists('$(MSBuildProjectFullPath).user')"/>
+	То есть подключается когда подключаются все .targets в самом-самом конце
+	То есть все свойства прописанные в .vcxproj.user нам не доступны 
+	(вернее доступны только для Item т.к. они оцениваются на втором проходе)
+	Поэтому настройки специфичные именно для проекта 
+	(не есб, а проекта - в частности откуда запускать 1С для отладки) мы пишем в сам файл проекта
+		TODO    Мы вынуждены этот блок делать ДО импорта Microsoft.Cpp.Default.props, который импортирует наш directory.build.props
+		        в котором настройки для нашего отладчика
+		        возможно более правильно в directory.build.props только отпределять $(ForceImportAfterCppDefaultProps),
+				который импортируется в конце Microsoft.Cpp.Default.props
+				или(и) через $(ForceImportBeforeCppProps) или $(ForceImportAfterCppProps)
+				которые импортируются соответственно в самом начале и в самом конце Microsoft.Cpp.props
+				когда уже определены настройки в разрезе конфигураций
+	-->
+  <PropertyGroup Label="EsbSettingsRun" Condition="'$(Configuration)|$(Platform)'=='v8309Debug|Win32'">
+    <ESB_1C_PATH>C:\Program Files\1cv8\8.3.9.1818\Bin</ESB_1C_PATH>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8323Debug|Win32'" Label="EsbSettingsRun">
+    <ESB_1C_PATH>C:\Program Files\1cv8\8.3.9.1818\Bin</ESB_1C_PATH>
+  </PropertyGroup>
+  <PropertyGroup Label="EsbSettingsRun" Condition="'$(Configuration)|$(Platform)'=='v8309Release|Win32'">
+    <ESB_1C_PATH>C:\Program Files\1cv8\8.3.9.1818\Bin</ESB_1C_PATH>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8323Release|Win32'" Label="EsbSettingsRun">
+    <ESB_1C_PATH>C:\Program Files\1cv8\8.3.9.1818\Bin</ESB_1C_PATH>
+  </PropertyGroup>
+  <!-- Опции где Есб и какая версия должны быть определены ДО включения directory.build.props
+			Поэтому мы храним их в .vcxproj файле и ДО включения Microsoft.Cpp.Default.props
+	ПС. Несмотря на то, что в группе с меткой EsbSettingsVer совсем нет свойства ESB_VER
+		Студия чует что оно там должно быть и показывает на странице свойств пустым 
+		(у страницы свойств указано что оно там должно быть)
+		(если и пустую группу удалить, то покажет по-умолчанию ESB_VER_AUTO как в .props указано)
+		(Ну ооочень умная, ммм.., программа..)
+ 	-->
+  <PropertyGroup Label="EsbSettingsCfg">
+    <ESB_PATH>D:\dev\esb-dev\esb</ESB_PATH>
+  </PropertyGroup>
+  <PropertyGroup Label="EsbSettingsVer">
+  </PropertyGroup>
+  <!-- Microsoft.Cpp.Default.props импортирует наше directory.build.props и мы начнем что-то знать о есб -->
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <!-- Важная секция в разрезе для каждой конфигурации. от UseDebugLibraries зависит потом все-->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8309Debug|Win32'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8323Debug|Win32'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8309Release|Win32'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8323Release|Win32'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8309Debug|x64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8323Debug|x64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8309Release|x64'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='v8323Release|x64'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <!-- Обязательная точка .vcxproj для ... TODO... не разобрался пока... -->
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='v8309Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='v8323Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='v8309Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='v8323Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='v8309Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='v8323Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='v8309Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='v8323Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <!-- Обязательная точка .vcxproj для создания макросов через диспетчер свойств -->
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="EsbSettingsRun" Condition="'$(Configuration)|$(Platform)'=='v8323Debug|x64'">
+    <ESB_1C_PATH>D:\Program Files\1cv8\8.3.23.1688\bin</ESB_1C_PATH>
+  </PropertyGroup>
+  <PropertyGroup Label="EsbSettingsRun" Condition="'$(Configuration)|$(Platform)'=='v8323Release|x64'">
+    <ESB_1C_PATH>D:\Program Files\1cv8\8.3.23.1688\bin</ESB_1C_PATH>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='v8309Debug|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>d:\EsbSwig\or\or-tools\.build\_deps\abseil-cpp-src;d:/EsbSwig/or/or-tools/.build/_deps/protobuf-src/src;D:\EsbSwig\or\or-tools\.build;D:\EsbSwig\or\or-tools;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>ortools_sat.lib;ortools_proto.lib;ortools_base.lib;ortools_util.lib;ortools_algorithms.lib;ortools_graph.lib;ortools_glop.lib;ortools_lp_data.lib;ortools_port.lib;d:\EsbSwig\or\zlib\lib\x86\zlibd.lib;libprotobufd.lib;utf8_range.lib;utf8_validity.lib;absl_synchronization.lib;absl_bad_any_cast_impl.lib;absl_bad_optional_access.lib;absl_bad_variant_access.lib;absl_base.lib;absl_city.lib;absl_civil_time.lib;absl_cord.lib;absl_cord_internal.lib;absl_cordz_functions.lib;absl_cordz_handle.lib;absl_cordz_info.lib;absl_cordz_sample_token.lib;absl_crc32c.lib;absl_crc_cord_state.lib;absl_crc_cpu_detect.lib;absl_crc_internal.lib;absl_debugging_internal.lib;absl_demangle_internal.lib;absl_die_if_null.lib;absl_examine_stack.lib;absl_exponential_biased.lib;absl_failure_signal_handler.lib;absl_flags_commandlineflag.lib;absl_flags_commandlineflag_internal.lib;absl_flags_config.lib;absl_flags_internal.lib;absl_flags_marshalling.lib;absl_flags_parse.lib;absl_flags_private_handle_accessor.lib;absl_flags_program_name.lib;absl_flags_reflection.lib;absl_flags_usage.lib;absl_flags_usage_internal.lib;absl_graphcycles_internal.lib;absl_hash.lib;absl_hashtablez_sampler.lib;absl_int128.lib;absl_kernel_timeout_internal.lib;absl_leak_check.lib;absl_log_entry.lib;absl_log_flags.lib;absl_log_globals.lib;absl_log_initialize.lib;absl_log_internal_check_op.lib;absl_log_internal_conditions.lib;absl_log_internal_fnmatch.lib;absl_log_internal_format.lib;absl_log_internal_globals.lib;absl_log_internal_log_sink_set.lib;absl_log_internal_message.lib;absl_log_internal_nullguard.lib;absl_log_internal_proto.lib;absl_log_severity.lib;absl_log_sink.lib;absl_low_level_hash.lib;absl_periodic_sampler.lib;absl_random_distributions.lib;absl_random_internal_distribution_test_util.lib;absl_random_internal_platform.lib;absl_random_internal_pool_urbg.lib;absl_random_internal_randen.lib;absl_random_internal_randen_hwaes.lib;absl_random_internal_randen_hwaes_impl.lib;absl_random_internal_randen_slow.lib;absl_random_internal_seed_material.lib;absl_random_seed_gen_exception.lib;absl_random_seed_sequences.lib;absl_raw_hash_set.lib;absl_raw_logging_internal.lib;absl_scoped_set_env.lib;absl_spinlock_wait.lib;absl_stacktrace.lib;absl_status.lib;absl_statusor.lib;absl_str_format_internal.lib;absl_strerror.lib;absl_string_view.lib;absl_strings.lib;absl_strings_internal.lib;absl_throw_delegate.lib;absl_time.lib;absl_time_zone.lib;absl_vlog_config_internal.lib;absl_malloc_internal.lib;absl_symbolize.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>d:\EsbSwig\or\or-tools\.build\Debug\bin\;d:\EsbSwig\or\or-tools\.build\Debug\orlib_crt_stat_MtD</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='v8323Debug|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>d:\EsbSwig\or\or-tools\.build\_deps\abseil-cpp-src;d:/EsbSwig/or/or-tools/.build/_deps/protobuf-src/src;D:\EsbSwig\or\or-tools\.build;D:\EsbSwig\or\or-tools;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>ortools_sat.lib;ortools_proto.lib;ortools_base.lib;ortools_util.lib;ortools_algorithms.lib;ortools_graph.lib;ortools_glop.lib;ortools_lp_data.lib;ortools_port.lib;d:\EsbSwig\or\zlib\lib\x86\zlibd.lib;libprotobufd.lib;utf8_range.lib;utf8_validity.lib;absl_synchronization.lib;absl_bad_any_cast_impl.lib;absl_bad_optional_access.lib;absl_bad_variant_access.lib;absl_base.lib;absl_city.lib;absl_civil_time.lib;absl_cord.lib;absl_cord_internal.lib;absl_cordz_functions.lib;absl_cordz_handle.lib;absl_cordz_info.lib;absl_cordz_sample_token.lib;absl_crc32c.lib;absl_crc_cord_state.lib;absl_crc_cpu_detect.lib;absl_crc_internal.lib;absl_debugging_internal.lib;absl_demangle_internal.lib;absl_die_if_null.lib;absl_examine_stack.lib;absl_exponential_biased.lib;absl_failure_signal_handler.lib;absl_flags_commandlineflag.lib;absl_flags_commandlineflag_internal.lib;absl_flags_config.lib;absl_flags_internal.lib;absl_flags_marshalling.lib;absl_flags_parse.lib;absl_flags_private_handle_accessor.lib;absl_flags_program_name.lib;absl_flags_reflection.lib;absl_flags_usage.lib;absl_flags_usage_internal.lib;absl_graphcycles_internal.lib;absl_hash.lib;absl_hashtablez_sampler.lib;absl_int128.lib;absl_kernel_timeout_internal.lib;absl_leak_check.lib;absl_log_entry.lib;absl_log_flags.lib;absl_log_globals.lib;absl_log_initialize.lib;absl_log_internal_check_op.lib;absl_log_internal_conditions.lib;absl_log_internal_fnmatch.lib;absl_log_internal_format.lib;absl_log_internal_globals.lib;absl_log_internal_log_sink_set.lib;absl_log_internal_message.lib;absl_log_internal_nullguard.lib;absl_log_internal_proto.lib;absl_log_severity.lib;absl_log_sink.lib;absl_low_level_hash.lib;absl_periodic_sampler.lib;absl_random_distributions.lib;absl_random_internal_distribution_test_util.lib;absl_random_internal_platform.lib;absl_random_internal_pool_urbg.lib;absl_random_internal_randen.lib;absl_random_internal_randen_hwaes.lib;absl_random_internal_randen_hwaes_impl.lib;absl_random_internal_randen_slow.lib;absl_random_internal_seed_material.lib;absl_random_seed_gen_exception.lib;absl_random_seed_sequences.lib;absl_raw_hash_set.lib;absl_raw_logging_internal.lib;absl_scoped_set_env.lib;absl_spinlock_wait.lib;absl_stacktrace.lib;absl_status.lib;absl_statusor.lib;absl_str_format_internal.lib;absl_strerror.lib;absl_string_view.lib;absl_strings.lib;absl_strings_internal.lib;absl_throw_delegate.lib;absl_time.lib;absl_time_zone.lib;absl_vlog_config_internal.lib;absl_malloc_internal.lib;absl_symbolize.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>d:\EsbSwig\or\or-tools\.build\Debug\bin\;d:\EsbSwig\or\or-tools\.build\Debug\orlib_crt_stat_MtD</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='v8309Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>d:\EsbSwig\or\or-tools\.build\_deps\abseil-cpp-src;d:/EsbSwig/or/or-tools/.build/_deps/protobuf-src/src;D:\EsbSwig\or\or-tools\.build;D:\EsbSwig\or\or-tools;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='v8323Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>d:\EsbSwig\or\or-tools\.build\_deps\abseil-cpp-src;d:/EsbSwig/or/or-tools/.build/_deps/protobuf-src/src;D:\EsbSwig\or\or-tools\.build;D:\EsbSwig\or\or-tools;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='v8309Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>d:\EsbSwig\or\or-tools\.build\_deps\abseil-cpp-src;d:/EsbSwig/or/or-tools/.build/_deps/protobuf-src/src;D:\EsbSwig\or\or-tools\.build;D:\EsbSwig\or\or-tools;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='v8323Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ESB_PATH)\modules;D:\Dev\.Pkg\or-tools\9.11\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <AdditionalOptions> /bigobj %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>D:\Dev\.Pkg\or-tools\9.11\Lib\Debug</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ortools_full.lib;utf8_validity.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='v8309Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>d:\EsbSwig\or\or-tools\.build\_deps\abseil-cpp-src;d:/EsbSwig/or/or-tools/.build/_deps/protobuf-src/src;D:\EsbSwig\or\or-tools\.build;D:\EsbSwig\or\or-tools;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='v8323Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ESB_PATH)\modules;D:\Dev\.Pkg\or-tools\9.11\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>D:\Dev\.Pkg\or-tools\9.11\Lib\Release</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ortools_full.lib;utf8_validity.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- Здесь где-то могут быть настройки если юзер что-то поменял для компилятора/линкера/т.п относительно настроек по-умолчанию для проекта-->
+  <!-- Собственно само содержимое проекта-->
+  <ItemGroup>
+    <ClInclude Include="esb.h" />
+    <ClInclude Include="esb_app_config.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="esbmain.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <OneEsModuleItem Include="1s_files\CommonModules\EsbCommon\Ext\Module.bsl" />
+    <OneEsModuleItem Include="1s_files\CommonModules\EsbManager\Ext\Module.bsl" />
+    <OneEsModuleItem Include="1s_files\CommonModules\EsbComponent\Ext\Module.bsl" />
+    <OneEsModuleItem Include="1s_files\Ext\OrdinaryApplicationModule.bsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\or-nqueens.md">
+      <SubType>
+      </SubType>
+    </None>
+  </ItemGroup>
+  <!-- Здесь будет импортироваться наш directory.build.tdrgets-->
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

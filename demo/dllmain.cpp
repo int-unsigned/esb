@@ -30,7 +30,6 @@
 using namespace esb;
 
 
-
 #ifndef NDEBUG
 // в режиме дебаг ассерты есбхлп передаются на этот esb_assert_handler
 ESB_NORETURN void esb_assert_handler(uint32_t line_) {
@@ -457,7 +456,7 @@ PseudoArrayOfInt SortPseudoArrayOfInt(PseudoArrayOfInt array_) {
 
 
 // Имплементация "универсальной" функции сортировки. сортирует все и опциями режима.
-using ArraySortMode = ClassMix<Undef, SortDirection, DelegatToMeth>;
+using ArraySortMode = OneOf<Undef, SortDirection, DelegatToMeth>;
 
 auto comparator_less() {
 	auto comparator = [](const Numeric& a, const Numeric& b) -> bool {
@@ -472,8 +471,10 @@ auto comparator_gret() {
 	return comparator;
 }
 // Обратите внимание что метод который сравнивает значения должен быть корректным (т.е. если а>b то ошибка если b>a). c++ это проверяет в дебаге.
-struct comparator_user : public DelegatToMeth {
-	comparator_user(DelegatToMeth&& meth_) : DelegatToMeth(std::move(meth_)) {}
+struct comparator_user : public DelegatToMeth 
+{
+	comparator_user(DelegatToMeth&& meth_) : DelegatToMeth(std::move(meth_)) 
+	{}
 	bool operator()(const Numeric& a, const Numeric& b) const {
 		return DelegatToMeth::Invoke<Boolean>(a, b);
 	}
@@ -494,7 +495,7 @@ void DoSortIt(const IteratorT it_begin_, const IteratorT it_end_, const ArraySor
 	}
 
 	assert(mode_.is<DelegatToMeth>());
-	return std::sort(it_begin_, it_end_, comparator_user(mode_.make<DelegatToMeth>()));
+	return std::sort(it_begin_, it_end_, comparator_user( const_cast<DelegatToMeth&&>(mode_.make<DelegatToMeth>()) ));	//TODO const_cast
 }
 
 
@@ -505,7 +506,7 @@ std::vector<Var<Numeric>> ArrayOfValueNumericToVector(const Array& arr_) {
 	for (auto&& v : arr_.EnumItems()) {
 		vector_of_n.emplace_back(std::move(v).as_value<Numeric>());
 	}
-	return std::move(vector_of_n);
+	return vector_of_n;
 }
 void ArrayOfValueFill(Array& arr_, std::vector<Var<Numeric>>& vector_) {
 	auto it_source = begin(vector_);
@@ -532,7 +533,7 @@ void SortPseudoArrayOfIntWithMode(PseudoArrayOfInt array_of_, const ArraySortMod
 
 
 // Собственно "универсальная" сортировка - разные объекты и разные режимы
-void SortArray(const ClassMix<Array, PseudoArrayOfNumeric, PseudoArrayOfInt>& array_mix_, const ArraySortMode& mode_) {
+void SortArray(const OneOf<Array, PseudoArrayOfNumeric, PseudoArrayOfInt>& array_mix_, const ArraySortMode& mode_) {
 	if (auto opt_array = array_mix_.make_if<Array>())
 		return SortArrayOfValueNumericAsVectorEx(*opt_array, mode_);
 	else if(auto opt_array_of_int = array_mix_.make_if<PseudoArrayOfInt>())
@@ -683,8 +684,6 @@ void ResultArrayShow(const Array& arr_)
 // в порядке тестирования ValueTable и связанных классов
 ValueTable CreateResultTable(const Array& results_array_) 
 {
-	//__debugbreak();
-
 	NumberQualifiers qn = NumberQualifiers::Create(Numeric(12), Numeric(2));
 	StringQualifiers qs = StringQualifiers::Create();
 	Array array_of_types = Array::Create();
@@ -708,7 +707,7 @@ ValueTable CreateResultTable(const Array& results_array_)
 		r.SetAt(1, s.GetVAL());
 	}
 
-	return std::move(vt);
+	return vt;
 }
 
 
@@ -787,13 +786,17 @@ Array SelectTestArrayOfNumeric()
 		res[ix] = rec[0].Value;
 		++ix;
 	}
-	return std::move(res);
+	return res;
 }
 
 
 // Для замера быстродействия
 esb::Numeric GetTicks() {
+#if (_WIN32_WINNT >= 0x0600)
+	return esb::Numeric(GetTickCount64());
+#else
 	return esb::Numeric(GetTickCount());
+#endif
 }
 
 

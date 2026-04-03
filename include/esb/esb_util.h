@@ -91,13 +91,15 @@ inline consteval bool is_aligned_as(uintptr_t addr_, size_t align_) {
 
 
 
-namespace esb {
-
-	template<typename>
-	inline constexpr bool always_false_v = false;
+namespace esb 
+{
 
 	template <class TypeT, class... TypesListT>
-	inline constexpr bool is_type_in_list = std::disjunction_v<std::is_same<TypeT, TypesListT>...>;
+	using is_type_in_list = std::disjunction<std::is_same<TypeT, TypesListT>...>;
+
+	template <class TypeT, class... TypesListT>
+	inline constexpr bool is_type_in_list_v = is_type_in_list<TypeT, TypesListT...>::value;//  std::disjunction_v<std::is_same<TypeT, TypesListT>...>;
+
 
 	template<class... Types>
 	struct typepack;
@@ -114,10 +116,13 @@ namespace esb {
 		template<size_t IndexN>		struct _item<IndexN> { static_assert(always_false_v<std::integral_constant<size_t, IndexN>>, "typepack index out of bounds"); };
 	public:
 		template<typename Type>	
-		struct contain : std::bool_constant<is_type_in_list<Type, ThisT, RestT... >> {};
+		struct contain : std::bool_constant<is_type_in_list_v<Type, ThisT, RestT... >> {};
 		struct size : std::integral_constant<size_t, sizeof...(RestT)+1> {};
+		//NOTE	иногда для чтобы компилятор "понял" нужно уточнять ::template item_t<0>
 		template<size_t IndexN>
-		using item_t = _item<IndexN, ThisT, RestT...>::type;
+		using item_t = typename _item<IndexN, ThisT, RestT...>::type;
+		//сахар
+		using item1st_t = ThisT;
 	};
 	template<typename... Types>
 	struct typepack<typepack<Types...>> : typepack<Types...> {
@@ -149,7 +154,6 @@ namespace esb {
 	using typepack_unique_t = typename typepack_unique<TypePackT>::type;	//Если Tp это наш typepack, то уйдем на специализацию для него. иначе будет ош.
 	//------------------------------------------------------------------------
 
-
 	// это должно работать для всех tuple-like структур (** Честно содрал https://stackoverflow.com/a/62089731)
 	// TOBE: нужно проверить
 #if 0
@@ -176,7 +180,48 @@ namespace esb {
 	template <class Tuple>
 	using unique_tuple_t = typename unique_tuple<Tuple>::type;
 #endif
+
+	//------------------------------------------------------------------------
+	// 
+	// проверяет присутствие каждого типа из typepack<TypesSubsetTy...> в typepack<TypesFullSetTy...>
+	// не проверяет уникальности typepack, и, соответственно даст true при is_typepack_subset_types< typepack<int, int>, typepack<int> >
+	//TODO
+	// не ожидает пустого typepack<TypesSubsetTy...>. 
+	// неоднозначная ситуация - с одной стороны пустой typepack есть подмножество любого другого
+	// с другой стороны мы должны проверять наличие типов и такой ситуации не должно быть
+	// Возможно нужно как-то конкретно определить эту ситуацию, а пока останавливаем компиляцию
+    template <typename...>
+    struct is_typepack_subset_types: std::false_type {};
+    //
+    template <typename... TypesSubsetTy, typename ... TypesFullSetTy>
+    struct is_typepack_subset_types<typepack<TypesSubsetTy...>, typepack<TypesFullSetTy...>> : std::conjunction<is_type_in_list<TypesSubsetTy, TypesFullSetTy...>...>
+    {
+        static_assert(sizeof...(TypesSubsetTy) > 0, "Unexpected empty subset for check (check will be true, but this may be unexpected result. handle this case manualy).");
+    };
+    //
+    template <typename TypepackSubsetTy, typename TypepackFullSetTy>
+    inline constexpr bool is_typepack_subset_types_v = is_typepack_subset_types<TypepackSubsetTy, TypepackFullSetTy>::value;
+
+
+	// проверяет именно что typepack<TypesSubsetTy...> есть подмножество typepack<TypesFullSetTy...>
+	// тоже не проверяет уникальности typepack-ов, но проверяет чтобы размер typepack<TypesSubsetTy...> был меньше или равен typepack<TypesFullSetTy...>
+    template <typename...>
+    struct is_typepack_subset_of : std::false_type {};
+    //
+    template <typename... TypesSubsetTy, typename ... TypesFullSetTy>
+    struct is_typepack_subset_of<typepack<TypesSubsetTy...>, typepack<TypesFullSetTy...>> 
+        :  std::conjunction< std::bool_constant<sizeof...(TypesSubsetTy) <= sizeof...(TypesFullSetTy)>, is_typepack_subset_types<typepack<TypesSubsetTy...>, typepack<TypesFullSetTy...>> >
+    {};
+    //
+    template <typename TypepackSubsetTy, typename TypepackFullSetTy>
+    inline constexpr bool is_typepack_subset_of_v = is_typepack_subset_of<TypepackSubsetTy, TypepackFullSetTy>::value;
+	//------------------------------------------------------------------------
 }
+
+
+
+
+
 
 
 template<typename>

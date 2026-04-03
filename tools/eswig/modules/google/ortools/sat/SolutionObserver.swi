@@ -1,0 +1,47 @@
+
+#pragma once
+
+
+//----------------------------
+//
+
+
+// Этот класс сделан полностью ручками и должен быть определен до operations_research::sat::Model
+//TODO	Воообще-то FeasibleSolutionObserver это НаблюдательЗаОсуществимымРешением (или ..ЗаОсуществленнымРешением)
+%esb_inline 
+%{
+//std::function<void(Model*)> NewFeasibleSolutionObserver(
+//  const std::function<void(const CpSolverResponse& response)>& callback
+//по сути наш SolutionObserver - это аналог с++ std::function<void(const CpSolverResponse& response)>
+//для 1С - "нечто", что можно вызвать с параметром CpSolverResponse
+//
+// в Arbitrary data_, мы из 1С передаем сюда структуру с информацией о нашей модели для просто толкового вывода на экран
+// структура_модели = Новый Структура("РазмерДоски,Ферзи,КоличествоРешений", размер_доски_, ферзи, 0);
+// она нам нужна именно by-ref, т.к. при каждом новом найденном решении Процедура НаблюдательЗаРешением(структура_модели_, результ_)
+// плюсует поле .КоличествоРешений и мы эту структуру у себя храним между вызовами
+// По сути это может быть любой объект. он нужен только для реализации "Процедура НаблюдательЗаРешением" на стороне 1С
+// 
+//TODO  Гхм.. А если никакой объект не нужен (или нужно несколько) ?? 
+//      Если нужно несколько, то можно сюда массив (или структуру) передать. не всегда удобно, но можно..
+//      А вот если объект совсем не нужен... то тривиальных вариантов нет - у этого "SolutionObserver" такая сигнатура
+//      Для другой сигнатуры нужен другой "SolutionObserver"
+//
+using SolutionObserverInvocable = DelegatToMethConv< DelegatToMethData<DelegatToMethPavlic, VarByRef<Arbitrary>>, const operations_research::sat::CpSolverResponse&, SolverResponse >;
+//
+ESB_WRAPPER_FOR_INVOCABLE(SolutionObserverInvocable, (void), (const operations_research::sat::CpSolverResponse&),
+    SolutionObserver, НаблюдательЗаРешением, "ACE33AE9-526C-4B3E-B93C-33218CD76044", "Объект компоненты OrTools::Sat::НаблюдательЗаРешением");
+//
+SolutionObserver CreateSolutionObserver(const CommonModule& module_, const String& meth_, Arbitrary&& data_) {
+    //NOTE  Invocable ожидает аргументы конструктора в обратном порядке (он так создается) - данные в начале, а module_+meth_ в конце
+    //      мы меняем здесь порядок аргументов, чтобы в 1С выглядело более естесственно
+    return SolutionObserver::Create(std::move(data_), module_, meth_);
+}
+%}
+//TODO	Нахально всовываем %esb_inline метод CreateSolutionObserver в интерфейс модуля
+%add_to_module_interface_meth(CreateSolutionObserver, "СоздатьНаблюдательЗаРешением")
+// Декларируем вставленный %esb_inline для Свиг
+class SolutionObserver;
+
+
+//
+//----------------------------

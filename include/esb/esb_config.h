@@ -135,7 +135,12 @@
 // а __has_include так не умеет - ему нужно сначала контактировать, а потом в строку преобразовать
 #if !defined(_LIB)
 #define ESB_ESBHLPLIB_NAME				esbhlp.lib
-#define ESB_ESBHLPLIB_PATH_SUFFIX		PP_PATH(PP_CAT(ESB_VER_NAME, ESB_CONFIGURATION_NAME), ESB_PLATFORM_NAME)
+#ifdef _DLL
+#	define ESB_ESBHLPLIB_PATH_SUFFIX_TAIL	PP_PATH(ESB_PLATFORM_NAME, dll)
+#else
+#	define ESB_ESBHLPLIB_PATH_SUFFIX_TAIL	PP_PATH(ESB_PLATFORM_NAME, lib)
+#endif
+#define ESB_ESBHLPLIB_PATH_SUFFIX		PP_PATH(PP_CAT(ESB_VER_NAME, ESB_CONFIGURATION_NAME), ESB_ESBHLPLIB_PATH_SUFFIX_TAIL)
 #define ESB_ESBHLPLIB_PATH_FILE			PP_PATH(ESB_ESBHLPLIB_PATH_SUFFIX, ESB_ESBHLPLIB_NAME)
 #define ESB_ESBHLPLIB_PATH_UP			../../lib
 // для тестирование наличия просто контактирую через / (для наглядности)
@@ -147,7 +152,7 @@
 #define ESB_ESBHLPLIB_PATH_FILE_LINK	__FILE__ "/../" PP_STRINGIZE(ESB_ESBHLPLIB_PATH_UP) "/" PP_STRINGIZE(ESB_ESBHLPLIB_PATH_FILE)
 #if !__has_include(   PP_STRINGIZE(ESB_ESBHLPLIB_PATH_FILE_TEST)  )
 constexpr const char* error_path = PP_STRINGIZE(ESB_ESBHLPLIB_PATH_FILE_TEST);
-#	error esb library folder has incorrect structure!
+#	error esbhlp.lib absent or esb library folder has incorrect structure!
 #endif
 // линкуемся
 //TODO	Нужно завести опцию компилятора LIB_ESBHLP, а не просто _LIB т.к. _LIB это от МС и может быть разной
@@ -196,6 +201,15 @@ constexpr const char* error_path = PP_STRINGIZE(ESB_ESBHLPLIB_PATH_FILE_TEST);
 
 #ifndef ESB_USE_AUTO_CONVERTION_VALUE_TO_CPP_TYPE
 #define ESB_USE_AUTO_CONVERTION_VALUE_TO_CPP_TYPE 1
+#endif
+
+
+// Делать ли всегда проверку того, что метод который должен вернуть ссылку на свои данные деиствительно ее возвращает
+// и выбрасывать исключение ESL_THROW_INVOKE_RETURN_THIS_FAILED если это не так. Если отключено то проверка только assert.
+// Это оптимизация на случай если Вы досконально уверены, что методы объектов вида 'LinearExpr& operator+=(const LinearExpr& other);'
+// возвращают ссылку на себя и только на себя.
+#ifndef ESB_USE_CHECK_THROW_INVOKE_RETURN_THIS
+#	define ESB_USE_CHECK_THROW_INVOKE_RETURN_THIS 1
 #endif
 
 
@@ -308,7 +322,8 @@ namespace esb
 	
 
 #if ESB_VER < ESB_VER_v8311
-	using strchar_t = wchar_t;
+	using char_t = wchar_t;
+	using strchar_t = char_t;
 	using string_t = std::wstring;
 	using string_view_t = std::wstring_view;
 	using strview_t = string_view_t;
@@ -322,10 +337,11 @@ namespace esb
 	ESB_NODISCARD inline string_t to_ustring(long double val_)	{ return std::to_wstring(val_); }
 #else
 //#elif ESB_VER < ESB_VER_v8320
-	using strchar_t = char16_t;
-	using string_t = std::basic_string<strchar_t>;
+	using char_t		= char16_t;
+	using strchar_t		= char_t;				//TODO	Переделать на просто char_t
+	using string_t		= std::basic_string<strchar_t>;
 	using string_view_t = std::basic_string_view<strchar_t>;
-	using strview_t = string_view_t;
+	using strview_t		= string_view_t;		//TODO убрать это. некрасиво..
 #	define ESB_T(XT_)	u ## XT_
 
 	//TOBE:	нет (пока) в с++ std методов to_u16string поэтому мы пока привязываемся к МС-интернал-реализации. Будут проблемы - будем решать..

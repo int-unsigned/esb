@@ -1,0 +1,65 @@
+
+#pragma once
+
+
+//----------------------------
+//
+
+%include <proto/proto_helpers.swg>
+
+
+// sat_parameters.pb.h -> sat_parameters.pb.i
+//
+//
+//NOTE	Ќеобходимо чтобы им€ враппера отличалось от имени оборачиваемого класса, а то —виг путаетс€ (точнее слишком умный)
+//		  примеру, у враппера класса operations_research::sat::Model (SatModel) мы добавл€ем %extend метод AddSatParameters(const ModelParameters& parameters_)
+//		если сдалать враппер тоже с именем SatParameters, то в с++ все ќк, т.к. врапперы объ€вл€ютс€ в другом (не operations_research::sat::) пространстве имен
+//		и с++ различает operations_research::sat::SatParameters и esb::modules::ortools::sat::SatParameters
+//		Ќќ! ƒл€ —виг AddSatParameters это "инжектируемый" в класс operations_research::sat::Model метод и в пространстве имен operations_research::sat:: он находит
+//			operations_research::sat::SatParameters класс, а не наш esb::modules::ortools::sat::SatParameters и соответственно метод расширени€ декларируетс€ как 
+//			AddSatParameters(const operations_research::sat::SatParameters& parameters_). ”пс...
+//TODO	—итуаци€, конечно, требует более глубокого изучени€. ќчень возможно что —виг нужно просто правильно "научить" в каких пространствах имен искать классы..
+//		Ќо пока проще просто не именовать классы-врапперы также как и их оборачиваемые классы
+//
+// SatParameters тоже ..Proto-тип, поэтому считаем его val-типом
+//
+%esb_wrap_info_cref(operations_research::sat::SatParameters,	"3DACA22C-62D8-473E-A16E-B647AD6A9CA4", "ModelParametersCRef",	"ѕараметрыћодели онст—сылка",	"");
+%esb_wrap_as_val(	operations_research::sat::SatParameters,  	"523A3A81-F0FD-4DF2-984D-41B15F3764E8", "ModelParameters",		"ѕараметрыћодели",     			"ќбъект ѕараметры —ј“ ћодели");
+%esb_ctor_constructor(operations_research::sat::SatParameters::SatParameters());
+
+%esb_ortools_proto_prop(operations_research::sat::SatParameters, enumerate_all_solutions, "EnumerateAllSolutions", "ѕеречислить¬се–ешени€");
+%esb_ortools_proto_prop(operations_research::sat::SatParameters, keep_all_feasible_solutions_in_presolve, "KeepAllFeasibleSolutionsInPresolve", "—охран€ть¬се¬озможные–ешени€¬ѕредварительном–ежиме");
+
+%esb_ortools_proto_list(operations_research::sat::SatParameters, extra_subsolvers, 
+		"–азмер—пискаƒополнительных–ешателей", "ќчистить—писокƒополнительных–ешателей", "ѕолучитьЁлемент—пискаƒополнительных–ешателей", "”становитьЁлемент—пискаƒополнительных–ешателей", "ƒобавитьЁлемент—пискаƒополнительных–ешателей");
+
+//
+namespace operations_research::sat
+{
+	class SatParameters 
+	{
+	public:
+		// в прото:		optional bool enumerate_all_solutions = 87 [default = false];
+		// в с++:
+		//				bool has_enumerate_all_solutions() const;
+		//				void clear_enumerate_all_solutions() ;
+		//				bool enumerate_all_solutions() const;
+		//				void set_enumerate_all_solutions(bool value);
+		%esb_ortools_proto_prop_decl(bool, enumerate_all_solutions);
+
+		// в прото:		optional bool keep_all_feasible_solutions_in_presolve = 173 [default = false];
+		%esb_ortools_proto_prop_decl(bool, keep_all_feasible_solutions_in_presolve);
+
+		//
+		//int 					extra_subsolvers_size() const;
+		//void 					clear_extra_subsolvers();
+		//const std::string&	extra_subsolvers(int index) const;
+		//void 					set_extra_subsolvers(int index, const std::string& value);
+		//void 					add_extra_subsolvers(const std::string& value);
+		%esb_ortools_proto_list_decl(extra_subsolvers, const std::string&);
+	};
+}
+
+
+//
+//----------------------------

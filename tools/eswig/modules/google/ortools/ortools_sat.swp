@@ -1,0 +1,835 @@
+//
+%esb_module("D4D7C55E-D397-4555-9422-B5370E4F8265", "—ат–ешатель", "ќбъект компоненты —ат–ешатель") ortools_sat
+//NOTE	esb в начале подразумеваетс€. т.е. modules::ortools::sat будет внутри esb
+%esb_module_namespace("modules::ortools::sat");
+
+
+//NOTE	Ётот макрос указывает в какое пространство имен будут помещены врапперы
+//		(см.ortools_util_sorted_interval_list.i)
+%define %ESB_MODULE_NS	esb		
+%enddef
+
+
+//TODO	"‘ишка" не доработана (см. в коде) и по большому счету не нужна
+//%esb_top_level_namespace_from_global("operations_research");
+
+// esb.swg можно €вно и не включать (его сам модуль подключает), но так нагл€днее
+%include <esb.swg>		
+//
+
+//TODO	’ренова€ это "фича" —виг не подключать аттрибуты ѕќ—Ћ≈ декларации типа. Ќ≈”ƒќЅЌќ. Ќужно решить это т.к. в swig::features_all
+//		все эти пост-аттрибуты присутствуют. Ќужно пост-обработку с ворнингом сделать!
+
+
+//NOTE	ƒл€ переименовани€ метода (%rename) Ќ≈Ћ№«я использовать namespace дл€ параматров !!!
+//		то есть ::Term(operations_research::sat::IntVar, int64_t) - Ќ≈ ѕ≈–≈»ћ≈Ќќ¬џ¬ј≈“—я!
+//		то ли это глюк —виг, то ли так задумано - хз.. 
+//		“ќ≈—“№ без namespace пишем
+//		ѕ—. Ќо дл€ вс€ких %esb_name_local - namespace нужен ќЅя«ј“≈Ћ№Ќ
+
+
+%esb_insert_module_begin 
+%{
+// [START program]
+// OR-Tools solution to the N-queens problem.
+// [START import]
+#include <stdlib.h>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "absl/strings/numbers.h"
+#include "ortools/base/logging.h"
+#include "ortools/sat/cp_model.h"
+#include "ortools/sat/cp_model.pb.h"
+#include "ortools/sat/cp_model_solver.h"
+#include "ortools/sat/model.h"
+#include "ortools/sat/sat_parameters.pb.h"
+
+// ѕодключаем esb (об€зательно, т.к. "esb.h" подключает "esb_app_config.h" - конкретные настройки дл€ компоненты)
+#include "esb.h"
+
+// мы делаем "врапперы" и esb_wrapper.h подключит (определит) необходимое
+#include "esb/esb_wrapper.h"
+
+// Ќужно уже непосредственно дл€ esb-or-tools-sat
+#include "esb/esb_stl_vector.h"
+#include "esb/esb_stl_span.h"
+#include "esb/esb_cpp_double.h"
+#include "esb/esb_stl_string_a.h"
+#include "esb/esb_stl_string_u.h"
+%}
+
+
+
+
+//TODO	absl.swg подключаетс€ и в sorted_interval... Ќужно ли его еще раз подключать ?
+//
+%include <absl/absl.swg>
+//
+// ”казываем, что std::string_view нужно просто "мапить" на 1C:String
+//	(это нужно дл€ absl::string_view, котора€ псевдоним дл€ std::string_view)
+%esb_1C_typemap_for_std_string_view_a();
+
+
+//TODO 	 ак-то по видимому при %import мы не видим (или не до конца понимаем) импортированные типы (флаг imported и т.п.)
+//		Ќужно разбиратьс€. ѕока просто включим полностью
+//%import "ortools_util_sorted_interval_list.i"
+//NOTE	"ortools_util_sorted_interval_list.i" это Ќ≈ самосто€тельный ћќƒ”Ћ№. его именно %include надо.
+//		а %import видимо именно дл€ модулей. т.е. типа %include, но с нюансами.. все равно разбиратьс€..
+//
+//NOTE	используем инклюде <> рассчитыва€, что —виг-препроцессор работает также как с-препроцессор
+//		то есть дл€ <> ищет начина€ с параметров заданных опцией -I, а не в текущей папке
+//		ѕ—. ѕуть -ID:\Dev\eswig\Examples\esb\google должен быть —виг-у задан.
+%include <ortools/util/sorted_interval_list.i>
+//
+
+
+%include <esb_std_vector.swg>
+%include <esb_std_string_a.swg>
+
+//NOTE	ќпредел€ем typemap дл€ std::string с использованием 1— типов (String), а не врапперов над std::string (CppStringAnsi ets..)
+%esb_1C_typemap_for_std_string_a();
+
+
+
+//TODO	–азобратьс€ что тут кому надо, а что вообще ненадо
+//
+%esb_localisation_dictionry(LinearExpr, 			"Ћинейное¬ыраж÷елочисленное")
+%esb_localisation_dictionry(DoubleLinearExpr, 		"Ћинейное¬ыражƒействительное")
+%esb_localisation_dictionry(LinearExpression, 		"Ћин¬ыражение")
+%esb_localisation_dictionry(MultiplyBy, 			"”множитьЌа")
+%esb_localisation_dictionry(Sat, 					"—ат")
+%esb_localisation_dictionry(Proto, 					"ѕрото")
+%esb_localisation_dictionry(SpanOfIntegers64, 		"ƒиапазон÷елых64")
+%esb_localisation_dictionry(SpanOfIntegers32, 		"ƒиапазон÷елых32")
+%esb_localisation_dictionry(SpanOfClosedInterval, 	"ƒиапазон«акрытых»нтервалов")
+%esb_localisation_dictionry(SpanOf, 				"ƒиапазон»з")
+%esb_localisation_dictionry(FlatSpanOfIntervals, 	"ѕлоскийƒиапазон»нтервалов")
+%esb_localisation_dictionry(CpModelBuilder, 		"ѕостроительћодели")
+%esb_localisation_dictionry(Linear, 				"Ћинейн")
+%esb_localisation_dictionry(Constraint, 			"ќграничение")
+%esb_localisation_dictionry(Domain, 				"ƒомен")
+%esb_localisation_dictionry(WithName, 				"—»менем")
+%esb_localisation_dictionry(Enumerate,				"ѕеречислить")
+%esb_localisation_dictionry(Solutions,				"–ешени€")
+%esb_localisation_dictionry(ValueAtOrBefore, 		"«начениеѕо»ндексу»лиѕредыдущее")
+%esb_localisation_dictionry(ValueAtOrAfter, 		"«начениеѕо»ндексу»ли—ледующее")
+
+
+
+// *** include *Proto definition ***
+//----------------------------------
+%include <ortools/sat/cp_model.pb.h.swi>
+// end *Proto definition
+
+
+
+//TODO	подключаетс€ в _sorted_interval_list.i и —виг выдает: Warning 404: Duplicate template instantiation of 'vector< int >' with name 'ArrayOfInteger32' ignored
+//		надо как-то научитьс€ не ругатьс€, если все дл€ esb_wrap_as_val_template совпадает.. черед дефайны в esb_wrap_as_val_template что ли...
+// использетс€ в operations_research::LinearExpr::variables
+//%esb_wrap_as_val_template(std::vector<int>, 	"B2B091FF-F33C-4305-8F63-AFDEC4B5B44E", ArrayOfInteger32, 	"ћассив÷елых32", 			"");
+
+
+
+
+// ------------ cp_model.h ------------
+// ------------------------------------
+//
+//BoolVar
+//IntVar
+//LinearExpr
+//DoubleLinearExpr
+//IntervalVar
+//
+//Constraint
+//CircuitConstraint
+//TableConstraint
+//ReservoirConstraint
+//AutomatonConstraint
+//NoOverlap2DConstraint
+//CumulativeConstraint
+//
+//CpModelBuilder
+//
+//API
+
+
+
+// -------------- -BoolVar- ---------------
+//
+%esb_wrap_info_cref(operations_research::sat::BoolVar,			"EFA8AF69-876E-4E89-951B-5F677D0FF34B", "BooleanVariableCRef",		"ѕеремЅулево онст—сылка",		"");
+//NOTE	_ref и _cval варианты дл€ использовани€ в контейнере
+%esb_wrap_info_ref(	operations_research::sat::BoolVar,  		"F4DE7E27-9F88-445F-A58C-44A66002704E", "BooleanVariableRef", 		"ѕеремЅулево—сылка",			"ќбъект ѕеремЅулево—сылка");
+%esb_wrap_info_cval(operations_research::sat::BoolVar,  		"5C027AFB-3FFB-49E4-874C-B035143D4697", "BooleanVariableConst",		"ѕеремЅулево онст",				"ќбъект ѕеремЅулево онст");
+//
+%esb_wrap_as_ref(	operations_research::sat::BoolVar, 			"59853312-892B-4260-AE43-180627102E42", "BooleanVariable", 			"ѕеремЅулево", 					"«начение —атЅулево");
+//NOTE	»нтересна€ "фишка" —виг (или мой баг). Ќам надо просто заменить реализацию WithName своей
+//		≈сли мы просто игнорим WithName и сразу же %extend WithName, то никакого WithName в классе нет - игнорировалс€.
+//		Ќќ! ≈сли сделать %extend WithName_ (с _ в конце), то %extend метод по€вл€етс€ с именем Ѕ≈« _ - т.е. просто WithName
+//		“о что нам и надо!
+//
+%ignore operations_research::sat::BoolVar::WithName;
+//NOTE	Ќаш вставл€емый метод AsLinearExpr зависит от враппера IntegerLinearExpr (создает его как возвращаемое значение), 
+//		который будет емититьс€ позже. ѕереставл€ть не получитс€, т.к. он тоже зависит от нас.
+//		ѕоэтому просто положим имплементацию в самом конце модул€, где все определени€ вже гарантировано сделаны.
+//
+%esb_implementation_place_at_end(operations_research::sat::BoolVar::AsLinearExpr() const);
+//
+%extend operations_research::sat::BoolVar {
+	BooleanVariable WithName_(const String& name_)
+	{
+		return convert_to_ret<BooleanVariable>( this->GetThisOwnerHandler(), _.WithName(convert_to_arg<std::string>(name_)) );
+	}
+//TODO	¬ с++ класс LinearExpr имеет открытые конструкторы от BoolVar, IntVar, и int64_t
+//		—оответственно где LinearExpr используетс€ как аргумент происходит "тиха€ конвертаци€" и создание LinearExpr из соответствующих объектов
+//		ј используетс€ LinearExpr оч.много где. ¬идимо поэтому √угль и решил сделать так - дл€ удобства себ€ и юзеров.
+//		Ќам бы по хорошему "дл€ удобства юзеров" тоже нужно везде где используетс€ LinearExpr сделать аргументы OneOf<LinearExpr, BoolVar, IntVar, int64_t> 
+//		и тихо выбирать вариант переданный юзером.
+//		Ќќ! ƒл€ нас это реальный гимор т.к. какого-то "авто" создани€ такого јѕ» нет.
+//		ѕќЁ“ќћ”! ѕока дл€ объектов BoolVar и IntVar сделаем €вные методы преобразовани€ - пусть юзер маетс€, а не мы. ѕотом посмотрим..
+//TODO	ѕ—. ≈ще нужно ‘рии метод сделать "—оздатьЋинейное¬ыражение»з„исла" дл€ int64_t
+//
+	IntegerLinearExpr AsLinearExpr() const 
+	{
+		return  IntegerLinearExpr::Create(_);
+	}
+}
+%esb_name_local("»нвертированное")				operations_research::sat::BoolVar::operator ~() const;
+
+
+
+
+// -------------- -IntVar- ---------------
+//
+%esb_wrap_info_cref(operations_research::sat::IntVar,			"1424128E-65C5-413F-BF48-3384C1D22896", "IntegerVariableCRef",		"ѕерем÷елое онст—сылка",	"");
+//NOTE	_ref и _cval варианты дл€ использовани€ в контейнере
+%esb_wrap_info_ref(	operations_research::sat::IntVar,  			"0C8B5D35-545D-4EE9-AA3F-AFFC45FF0CF9", "IntegerVariableRef", 		"ѕерем÷елое—сылка",			"ќбъект ѕерем÷елое—сылка");
+%esb_wrap_info_cval(operations_research::sat::IntVar,  			"3D026DE9-9F27-4303-89CB-10AC8E02DCFF", "IntegerVariableConst",		"ѕерем÷елое онст",			"ќбъект ѕерем÷елое онст");
+//
+%esb_wrap_as_ref(	operations_research::sat::IntVar, 			"E441985A-FD51-4511-802D-E4EEECECCF1C", "IntegerVariable", 			"ѕерем÷елое", 				"«начение —ат÷елое");
+%ignore operations_research::sat::IntVar::WithName;
+%esb_implementation_place_at_end(operations_research::sat::IntVar::AsLinearExpr() const);
+%extend operations_research::sat::IntVar {
+	IntegerVariable WithName_(const String& name_)
+	{
+		return convert_to_ret<IntegerVariable>( this->GetThisOwnerHandler(), _.WithName(convert_to_arg<std::string>(name_)) );
+	}
+//	см. BooleanVariable::AsLinearExpr
+	IntegerLinearExpr AsLinearExpr() const 
+	{
+		return  IntegerLinearExpr::Create(_);
+	}
+}
+%esb_name_local("ѕреобразованное Ѕулеву")		operations_research::sat::IntVar::ToBoolVar() const;
+
+
+
+// -------------- -LinearExpr- ---------------
+//
+%esb_wrap_info_cref(operations_research::sat::LinearExpr,		"9B374D9E-F77D-4E35-A4F1-F670C6F01014", "IntegerLinearExprCRef",	"Ћинейное¬ыраж÷елочисленное онст—сылка",	"");
+%esb_wrap_info_ref(	operations_research::sat::LinearExpr,		"599A204D-1380-4059-9BB9-994DF6854986", "IntegerLinearExprRef",		"Ћинейное¬ыраж÷елочисленное—сылка",			"");
+//NOTE	_cval вариант дл€ использовани€ в контейнере
+%esb_wrap_info_cval(operations_research::sat::LinearExpr,		"3C70ED53-4E73-4F38-965F-4EFB2387B89D", "IntegerLinearExprConst",	"Ћинейное¬ыраж÷елочисленное онст",			"");
+//NOTE	Ёто деклараци€ дополнительного объекта "статический-интерфейс-дл€-.."
+//		” LinearExpr есть статические методы, которые можно вызывать без создани€ экземпл€ра класса
+//		чтобы не делать некрасивые LinearExpr_DoFoo(), мы создаем отдельный класс только со статическим методами из LinearExpr
+//		и возвращаем его экземпл€р свойством компоненты LinearExpr
+//		“о есть из 1— статические методы LinearExpr можно будет вызывать как <компонента>.LinearExpr.DoFoo()
+//		(практически как в c#)
+//		ѕ—. экземпл€р класса "статический-интерфейс-дл€-.." создаетс€ статическим один раз при первом вызове.
+//			накладные расходы "на красоту" минимальны
+%esb_wrap_info_stat(operations_research::sat::LinearExpr,		"BBB822EC-FB42-4248-B146-1326A0E9DB51", "IntegerLinearExprStat",	"Ћинейное¬ыраж÷елочисленное—татик",			"");
+// собственно LinearExpr
+%esb_wrap_as_val(	operations_research::sat::LinearExpr,  		"D1961343-644B-431C-8495-ABF365DA7AF8", "IntegerLinearExpr",		"Ћинейное¬ыраж÷елочисленное",				"");
+
+
+//NOTE	¬ ор-тулс есть свободные операторы +/- дл€ создани€ нового выражени€ с добавкой(вычитанием)
+//		Ќо мне показалось что свободные операторы использовать семантически не красиво
+//		поэтому расшир€ю интерфейс самого выражени€ (дл€ красоты)
+%esb_name_local("—оздатьЌовоеƒобавив")			operations_research::sat::LinearExpr::CreateNewWithAdd;
+%esb_name_local("—оздатьЌовоеќтн€в")			operations_research::sat::LinearExpr::CreateNewWithSub;
+//
+%extend operations_research::sat::LinearExpr {
+	IntegerLinearExpr CreateNewWithAdd(const Numeric& value_) const
+	{
+		return convert_to_ret<IntegerLinearExpr>(_ + convert_to<int64_t>(value_));
+	}
+	IntegerLinearExpr CreateNewWithSub(const Numeric& value_) const
+	{
+		return convert_to_ret<IntegerLinearExpr>(_ - convert_to<int64_t>(value_));
+	}
+}
+
+
+%esb_name_local("—уммаЌабораѕерем÷елое")			operations_research::sat::LinearExpr::Sum(absl::Span<const operations_research::sat::IntVar>);
+%esb_name_local("—уммаЌабораѕеремЅулево")			operations_research::sat::LinearExpr::Sum(absl::Span< operations_research::sat::BoolVar const >);
+
+
+//TODO	фигн€ получилась - переработать!!!
+//operations_research::sat::LinearExpr::LinearExpr(operations_research::sat::BoolVar) 
+//operations_research::sat::LinearExpr::LinearExpr(IntVar var);
+//operations_research::sat::LinearExpr::LinearExpr(int64_t)
+%rename(LinearExprFromSatBoolean)	operations_research::sat::LinearExpr::LinearExpr(BoolVar);
+%rename(LinearExprFromSatInteger)	operations_research::sat::LinearExpr::LinearExpr(IntVar var);
+%rename(LinearExprFromNumeric)		operations_research::sat::LinearExpr::LinearExpr(int64_t);
+//
+//%extend operations_research::sat::LinearExpr {
+//LinearExpr(const OneOf<SatBoolean, SatInteger, Numeric>& linear_expr_)
+//{
+//	if(auto may_be_linear_expr_SatBoolean = linear_expr_.make_if<SatBoolean>())
+//		return LinearExprFromSatBoolean(*may_be_linear_expr_SatBoolean);
+//	if(auto may_be_linear_expr_SatInteger = linear_expr_.make_if<SatInteger>())
+//		return LinearExprFromSatInteger(*may_be_linear_expr_SatInteger);
+//
+//	return LinearExprFromNumeric(linear_expr_.make<Numeric>());
+//}
+//}
+
+
+//LinearExpr& LinearExpr::operator+=(const LinearExpr& other);
+//%rename(AppendWithLinearExpr)	operations_research::sat::LinearExpr::operator+=(const LinearExpr& other);
+//LinearExpr& LinearExpr::operator-=(const LinearExpr& other);
+//%rename(SubstructLinearExpr)	operations_research::sat::LinearExpr::operator-=(const LinearExpr& other);
+//LinearExpr& LinearExpr::operator*=(int64_t factor);
+
+
+//static LinearExpr Sum(absl::Span<const IntVar> vars);
+//static LinearExpr Sum(absl::Span<const BoolVar> vars);
+%rename(SumOfIntegerVariables)	operations_research::sat::LinearExpr::Sum(absl::Span<const IntVar> vars);
+%rename(SumOfBooleanVariables)	operations_research::sat::LinearExpr::Sum(absl::Span<const BoolVar> vars);
+//TODO	SumOfSpanOf  ???
+
+
+//static LinearExpr WeightedSum(absl::Span<const IntVar> vars, absl::Span<const int64_t> coeffs);
+//static LinearExpr WeightedSum(absl::Span<const BoolVar> vars, absl::Span<const int64_t> coeffs);
+%rename(WeightedSumOfIntegerVariables)			operations_research::sat::LinearExpr::WeightedSum(absl::Span<const IntVar> vars, absl::Span<const int64_t> coeffs);
+%rename(WeightedSumOfBooleanVariables)			operations_research::sat::LinearExpr::WeightedSum(absl::Span<const BoolVar> vars, absl::Span<const int64_t> coeffs);
+%esb_name_local("¬звешенна€—умма÷елых")			operations_research::sat::LinearExpr::WeightedSum(absl::Span<const operations_research::sat::IntVar>, absl::Span<const int64_t>);
+%esb_name_local("¬звешенна€—уммаЅулевых")		operations_research::sat::LinearExpr::WeightedSum(absl::Span<const operations_research::sat::BoolVar>, absl::Span<const int64_t>);
+%esb_name_local("¬звешенна€—умма")				operations_research::sat::LinearExpr::WeightedSumOf;
+//
+%extend operations_research::sat::LinearExpr
+{
+static IntegerLinearExpr WeightedSumOf(OneOf< CppArrayOfIntegerVariable, CppArrayOfBooleanVariable > const & vars_, CppArrayOfInteger64 const & coeffs_)
+{
+	if (vars_.is<CppArrayOfIntegerVariable>())
+		return WeightedSumOfIntegerVariables(vars_.as<CppArrayOfIntegerVariable>(), coeffs_);
+	return WeightedSumOfBooleanVariables(vars_.make<CppArrayOfBooleanVariable>(), coeffs_);
+}
+}
+
+
+//NOTE	„е такое "“ерм" - не знаю.
+//		написано: "Constructs var * coefficient"
+//static LinearExpr Term(IntVar var, int64_t coefficient);
+//static LinearExpr Term(BoolVar var, int64_t coefficient);
+//
+%rename(TermOfIntegerVariable)			operations_research::sat::LinearExpr::Term(IntVar, int64_t);
+%rename(TermOfBooleanVariable)			operations_research::sat::LinearExpr::Term(BoolVar, int64_t);
+%esb_name_local("“ерм»зѕерем÷елое")     operations_research::sat::LinearExpr::Term(operations_research::sat::IntVar var, int64_t coefficient);
+%esb_name_local("“ерм»зѕеремЅулево")    operations_research::sat::LinearExpr::Term(operations_research::sat::BoolVar var, int64_t coefficient);
+%esb_name_local("“ерм»з")     			operations_research::sat::LinearExpr::TermOf;
+//
+%extend operations_research::sat::LinearExpr 
+{
+static IntegerLinearExpr TermOf(OneOf< IntegerVariable, BooleanVariable > const & variable_, Numeric const & coeffs_)
+{
+	if (variable_.is<IntegerVariable>())
+		return TermOfIntegerVariable(variable_.as<IntegerVariable>(), coeffs_);
+	return TermOfBooleanVariable(variable_.make<BooleanVariable>(), coeffs_);
+}
+}
+
+
+
+
+// -------------- -DoubleLinearExpr- ---------------
+//
+%esb_wrap_info_cref(operations_research::sat::DoubleLinearExpr,	"DA6E06A7-0491-41EC-9356-9B081EB12A2A", "DoubleLinearExprCRef",		"Ћинейное¬ыражƒействительное онст—сылка",	"");
+%esb_wrap_info_ref(	operations_research::sat::DoubleLinearExpr,	"4FD3F6A5-B3B7-4693-9F43-F73FB6D6736C", "DoubleLinearExprRef",		"Ћинейное¬ыражƒействительное—сылка",		"");
+%esb_wrap_info_stat(operations_research::sat::DoubleLinearExpr,	"EF747007-0230-4B2D-AC63-82EB7B40B650", "DoubleLinearExprStat",		"Ћинейное¬ыражƒействительное—татик",		"");
+%esb_wrap_as_val(	operations_research::sat::DoubleLinearExpr,	"BAC04E9F-C586-4590-A41D-503211EAAA66", "DoubleLinearExpr",			"Ћинейное¬ыражƒействительное",				"");    
+
+//explicit DoubleLinearExpr(BoolVar var);
+//explicit DoubleLinearExpr(IntVar var);
+//explicit DoubleLinearExpr(double constant);
+%rename(DoubleLinearExprFromSatBoolean)	operations_research::sat::DoubleLinearExpr::DoubleLinearExpr(BoolVar var);
+%rename(DoubleLinearExprFromSatInteger)	operations_research::sat::DoubleLinearExpr::DoubleLinearExpr(IntVar var);
+%rename(DoubleLinearExprFromDouble)	operations_research::sat::DoubleLinearExpr::DoubleLinearExpr(double constant);
+//TODO DoubleLinearExprFrom
+
+//DoubleLinearExpr& AddExpression(const LinearExpr& exprs, double coeff = 1.0)
+%esb_param_rename(exprs, "expr_")		operations_research::sat::DoubleLinearExpr::AddExpression;
+
+//DoubleLinearExpr& operator+=(double value)
+//DoubleLinearExpr& operator+=(IntVar var)
+//DoubleLinearExpr& operator+=(BoolVar var)
+//DoubleLinearExpr& operator+=(const DoubleLinearExpr& expr)
+//TODO	ќни возвращают this !!! делать ESB_META_INTERFACE_THIS_METH	!!!
+%rename(AppendDouble)			operations_research::sat::DoubleLinearExpr::operator+=(double value);
+%rename(AppendSatInteger)		operations_research::sat::DoubleLinearExpr::operator+=(IntVar var);
+%rename(AppendSatBoolean)		operations_research::sat::DoubleLinearExpr::operator+=(BoolVar var);
+%rename(AppendDoubleLinearExpr)	operations_research::sat::DoubleLinearExpr::operator+=(const DoubleLinearExpr& expr);
+//TODO	лениво руками - сделать авто!
+//%extend operations_research::sat::DoubleLinearExpr {
+//SatDoubleLinearExpr Append(OneOf<...>)
+//}
+
+//DoubleLinearExpr& operator-=(double value)
+//DoubleLinearExpr& operator-=(IntVar var)
+//DoubleLinearExpr& operator-=(const DoubleLinearExpr& expr)
+%rename(SubstructDouble)			operations_research::sat::DoubleLinearExpr::operator-=(double value);
+%rename(SubstructSatInteger)		operations_research::sat::DoubleLinearExpr::operator-=(IntVar var);
+%rename(SubstructDoubleLinearExpr)	operations_research::sat::DoubleLinearExpr::operator-=(const DoubleLinearExpr& expr);
+//TODO	лениво руками - сделать авто!
+//%extend operations_research::sat::DoubleLinearExpr {
+//SatDoubleLinearExpr Substruct(OneOf<...>)
+//}
+
+//DoubleLinearExpr& operator*=(double coeff)
+//%rename(MultiplyByDouble)			operations_research::sat::DoubleLinearExpr::operator*=(double coeff);
+
+//static DoubleLinearExpr Sum(absl::Span<const IntVar> vars)
+//static DoubleLinearExpr Sum(absl::Span<const BoolVar> vars)
+//TODO	вообще-то статические методы должны быть и ¬ »Ќ“≈–‘≈…—≈
+//		»  ј  —¬ќЅќƒЌџ≈ - а в этом случае им нужны (возможно) ƒ–”√»≈ »ћ≈Ќј
+//		т.к. DoubleLinearExpr::Sum естесственно пон€тно что возвращает DoubleLinearExpr
+//		а как FREE метод не очен...
+// тут можно SumOf... не делать - просто Sum читаетс€ нормально - "—уммировать"
+%rename(SumSpanOfSatIntegerAsDoubleLinearExpr)	operations_research::sat::DoubleLinearExpr::Sum(absl::Span<const IntVar> vars);
+%rename(SumSpanOfSatBooleanAsDoubleLinearExpr)	operations_research::sat::DoubleLinearExpr::Sum(absl::Span<const BoolVar> vars);
+//TODO	SumSpanAsDoubleLinearExpr
+
+//
+//static DoubleLinearExpr WeightedSum(absl::Span<const IntVar> vars, absl::Span<const double> coeffs)
+//static DoubleLinearExpr WeightedSum(absl::Span<const BoolVar> vars, absl::Span<const double> coeffs)
+%rename(WeightedSumSpanOfSatIntegerAsDoubleLinearExpr)	operations_research::sat::DoubleLinearExpr::WeightedSum(absl::Span<const IntVar> vars, absl::Span<const double> coeffs);
+%rename(WeightedSumSpanOfSatBooleanAsDoubleLinearExpr)	operations_research::sat::DoubleLinearExpr::WeightedSum(absl::Span<const BoolVar> vars, absl::Span<const double> coeffs);
+//TODO	WeightedSumSpanAsDoubleLinearExpr
+
+
+
+
+// -------------- -IntervalVar- ---------------
+//
+%esb_wrap_info_cref(operations_research::sat::IntervalVar,		"AFE5145A-323A-40CC-B090-2F514D0F5EB5", "IntervalVariableCRef",		"ѕерем»нтервал онст—сылка",					"");
+//NOTE	_ref и _cval варианты дл€ использовани€ в контейнере
+%esb_wrap_info_ref(	operations_research::sat::IntervalVar,		"C769677B-0DA1-42F8-B752-85AC32638193", "IntervalVariableRef", 		"ѕерем»нтервал—сылка",						"");
+%esb_wrap_info_cval(operations_research::sat::IntervalVar,		"F2AB4F8C-B888-4783-BADA-070F1D21395B", "IntervalVariableConst",	"ѕерем»нтервал онст",						"");
+//
+%esb_wrap_as_ref(	operations_research::sat::IntervalVar,		"FEBF4DC1-2B1D-423C-B3BC-5090D0BBD817", "IntervalVariable",     	"ѕерем»нтервал",							""); 
+%ignore operations_research::sat::IntervalVar::WithName;
+%extend operations_research::sat::IntervalVar {
+	IntervalVariable WithName_(const String& name_)
+	{
+		return convert_to_ret<IntervalVariable>( this->GetThisOwnerHandler(), _.WithName(convert_to_arg<std::string>(name_)) );
+	}
+}
+%esb_name_local("»нтервалѕрисутствует")			operations_research::sat::IntervalVar::PresenceBoolVar;
+
+
+
+// -------------- -Constraint- ---------------
+//
+%esb_wrap_as_ref(operations_research::sat::Constraint,				"7F2491A6-3E62-4D95-8694-2544564449AF", "Constraint",     				"ќграничение",     ""); 
+//
+%ignore operations_research::sat::Constraint::WithName;
+//NOTE	Ќаш (≈—Ѕ) Constraint называетс€ также как и operations_research::sat::Constraint. 
+//		Ёто нормально дл€ с++ т.к. эти классы будут в разных namespace.
+//		Ќќ! —виг об этом не знает и разворачивает Constraint до пространства имен куда метод вставл€етс€.
+//		“о есть до operations_research::sat:: ј там свой Constraint.
+//		»спользование префикса this:: у Constraint преп€тствует разворачиванию —вигом до operations_research::sat::Constraint
+//		а сам этот префикс мы в коде вырезаем дл€ %extend-методов. Ёто у нас хак такой.. (см.код модул€.)
+//
+//TODO	¬се варианты ..Constraint унаследованы от просто Constraint, а поскольку метод WithName у просто Constraint возвращает просто Constraint
+//		“ќ! ¬ наследниках мы тер€ем конкретный тип. «агадка зачем √угль так сделал. 
+//		(» вообще больша€ загадка зачем это все сделано именно так поскольку внутри этот WithName возвращает *this, а не новый объект)
+//		¬идимо в этой клетке такие правила...
+//		Ќќ! ” нас затык - сделать "перекрытие" расширеного метода из базового расширенным методом в наследнике не получаетс€ :(
+//		ѕолучаетс€ два метода WithName.. “о ли у мен€ проблема, то ли у —виг, хз.. “ребует изучени€.
+//		
+//		» при этом получаетс€, что нам метод WithName_ возвращающий значение вообще один на всех наследников делать нельз€
+//		так как это в с++ operations_research::sat::Constraint легко и непринужденно преобразуетс€ к operations_research::sat::CircuitConstraint
+//		и наоборот. ј у нас в ≈—Ѕ это два разных типа с разными гуидами ничего друг о друге не знающие. Ќет у нас в ≈—Ѕ пон€ти€ наследовани€ пока..
+//
+//TODO	 ј–ƒ»ЌјЋ№Ќќ≈ решение этой проблемы сделать в инвоукере есб конвертацию "на лету" в std::string
+//		ј все эти WithName врапить как return this
+//
+//		ј пока.. ƒелаем процедуру SetName одну на всех ничего не возвращающую. 
+//		ј там где эти "Constraint" создают по возможности попытаемс€ создавать их сразу с именем если нужно дл€ удобства
+// 
+//%extend operations_research::sat::Constraint {
+//	this::Constraint WithName_(const String& name_)
+//	{
+//		return convert_to_ret<Constraint>( this->GetThisOwnerHandler(), _.WithName(convert_to_arg<std::string>(name_)) );
+//	}
+//}
+//
+%extend operations_research::sat::Constraint {
+	void SetName(const String& name_)
+	{
+		//NOTE используем конвертацию в std::string, хот€ WithName декларирован от string_view
+		//		это сделано специально чтобы не объ€вл€ть конвертатор в string_view, 
+		//		который может быть небезопасным в иных контекстах
+		_.WithName(convert_to_arg<std::string>(name_));
+	}
+}
+//
+//NOTE	Ёто все наследники Constraint и получают _as_ref автоматически
+//TODO	на случай €вного указани€ _val/_ref дл€ класса-наследника нужно в коде сделать проверку конфликта с базовым
+//
+%esb_wrap_info(operations_research::sat::CircuitConstraint,			"D276DFE6-2F28-42CB-B9BF-A2A26742D61F", "CircuitConstraint",			"ќграничение÷епочка",				"");
+%esb_wrap_info(operations_research::sat::MultipleCircuitConstraint,	"A1BBE7C3-4BC5-4D04-B83C-5DA3B8B90FE9", "MultipleCircuitConstraint",	"ќграничениећножественна€÷епочка",	"");    
+%esb_wrap_info(operations_research::sat::TableConstraint,			"5D705B08-C7EB-4EF3-AE24-244AA0010FF5", "TableConstraint",				"“абличноеќграничение",				"");    
+%esb_wrap_info(operations_research::sat::ReservoirConstraint,		"30975558-71B2-4760-B234-2E0BCBA81B2D", "ReservoirConstraint",			"–езервуарќграничений",				"");    
+%esb_wrap_info(operations_research::sat::AutomatonConstraint,		"52D0C6BD-95DE-4C93-8036-6E74CD9C2CA0", "AutomatonConstraint",			"ќграничениејвтомат",				"");    
+%esb_wrap_info(operations_research::sat::NoOverlap2DConstraint,		"EEBDB193-5193-489D-AEA2-5A429CE1283C", "NoOverlap2DConstraint",		"ќграничениеЅезѕерекрыти€2D",		"");    
+%esb_wrap_info(operations_research::sat::CumulativeConstraint,		"034A5744-608D-4017-99BA-EDFF0C6F1BCF", "CumulativeConstraint",			"Ќакопительноеќграничение",			"");    
+//
+%esb_name_local("ƒобавитьƒугу")					operations_research::sat::CircuitConstraint::AddArc(int,int,operations_research::sat::BoolVar);
+%esb_name_local("ƒобавитьƒугу")					operations_research::sat::MultipleCircuitConstraint::AddArc(int,int,operations_research::sat::BoolVar);
+
+
+
+
+// -------------- -CpModelBuilder- ---------------
+//
+%esb_wrap_as_val(operations_research::sat::CpModelBuilder,     "99F0EF35-53F7-48F1-875B-99D94C017D44", "OptimizationModelBuilder",			"ѕостроительќптимизационнойћодели",	"");
+%esb_ctor_creator(operations_research::sat::CpModelBuilder::CpModelBuilder());
+//
+%extend operations_research::sat::CpModelBuilder {
+	BooleanVariable CreateBooleanVariableWithName(ESB_THIS_ENTITY_HANDLER_, const String& name_)
+	{
+		return convert_to_ret<BooleanVariable>(ESB_MOVE_ENTITY_HANDLER_, _.NewBoolVar().WithName(convert_to_arg<std::string>(name_)));
+	}
+	IntegerVariable CreateIntegerVariableWithName(ESB_THIS_ENTITY_HANDLER_, const DomainOfInteger64& domain_, const String& name_)
+	{
+		return convert_to_ret<IntegerVariable>(ESB_MOVE_ENTITY_HANDLER_, _.NewIntVar(convert_to_arg<const operations_research::Domain&>(domain_)).WithName(convert_to_arg<std::string>(name_)));
+	}
+	this::Constraint AddAllDifferentIntegerVariables(ESB_THIS_ENTITY_HANDLER_, const OneOf<CppArrayOfIntegerVariable, Array>& variables_)
+	{
+		if(auto may_be_variables_vector = variables_.make_if<CppArrayOfIntegerVariable>())
+			return convert_to_ret<Constraint>(ESB_MOVE_ENTITY_HANDLER_, _.AddAllDifferent(convert_to_arg<const std::vector<::operations_research::sat::IntVar>&>(*may_be_variables_vector)) );
+		else       
+			return convert_to_ret<Constraint>(ESB_MOVE_ENTITY_HANDLER_, _.AddAllDifferent(convert_to_arg_vector<::operations_research::sat::IntVar, IntegerVariable>(variables_.make<Array>()) ) );
+	}
+	this::Constraint AddAllDifferentLinearExpressions(ESB_THIS_ENTITY_HANDLER_, const Array& expr_array_)
+	{
+		return convert_to_ret<Constraint>(ESB_MOVE_ENTITY_HANDLER_, _.AddAllDifferent(convert_to_arg_vector<::operations_research::sat::LinearExpr, IntegerLinearExpr>(expr_array_)));
+	}
+}
+
+// extended
+//TODO	там в интерфейсе NewIntVar(—оздатьѕерем÷елое) есть нужно бы дл€ пор€дка в CreateIntegerVariable переименовать (и Boolean)
+%esb_name_local("—оздатьѕеремЅулево—»менем")				operations_research::sat::CpModelBuilder::CreateBooleanVariableWithName;
+%esb_name_local("—оздатьѕерем÷елое—»менем")					operations_research::sat::CpModelBuilder::CreateIntegerVariableWithName;
+%esb_name_local("ƒобавить¬се–азличныеѕерем÷елое")			operations_research::sat::CpModelBuilder::AddAllDifferentIntegerVariables;
+%esb_name_local("ƒобавить¬се–азличныеЋинейные¬ыражени€")	operations_research::sat::CpModelBuilder::AddAllDifferentLinearExpressions;
+// raw
+%esb_name_local("—оздатьѕерем÷елое")						operations_research::sat::CpModelBuilder::NewIntVar;
+%esb_name_local("—оздатьѕеремЅулево")						operations_research::sat::CpModelBuilder::NewBoolVar;
+%esb_name_local("ѕолучитьѕеремЅулево»зѕрото»ндекса")		operations_research::sat::CpModelBuilder::GetBoolVarFromProtoIndex;
+%esb_name_local("ѕолучитьѕерем÷елое»зѕрото»ндекса")			operations_research::sat::CpModelBuilder::GetIntVarFromProtoIndex;
+//
+%esb_name_local("ƒобавитьЅулево»Ћ»")					operations_research::sat::CpModelBuilder::AddBoolOr(absl::Span< operations_research::sat::BoolVar const >);
+%esb_name_local("ƒобавитьЅулево»")						operations_research::sat::CpModelBuilder::AddBoolAnd(absl::Span< operations_research::sat::BoolVar const >);
+%esb_name_local("ƒобавитьЅулево»сключающее»Ћ»")     	operations_research::sat::CpModelBuilder::AddBoolXor(absl::Span< operations_research::sat::BoolVar const >);
+%esb_name_local("ƒобавитьЅулево акћинимумуќдно»стина")	operations_research::sat::CpModelBuilder::AddAtLeastOne(absl::Span< operations_research::sat::BoolVar const >);
+//ƒобавл€ет ограничение, что не более одного литерала из литералов должно быть истинным.
+%esb_name_local("ƒобавитьЅулевоЌеЅолееќдного»стина")	operations_research::sat::CpModelBuilder::AddAtMostOne(absl::Span< operations_research::sat::BoolVar const >);
+%esb_name_local("ƒобавитьќграничениејвтомат")			operations_research::sat::CpModelBuilder::AddAutomaton(absl::Span< operations_research::sat::IntVar const >,int,absl::Span< int const >);
+//
+%esb_name_local("ƒобавить»мпликациюЅулевых«начений")	operations_research::sat::CpModelBuilder::AddImplication(operations_research::sat::BoolVar,operations_research::sat::BoolVar);
+%esb_name_local("ƒобавить»мпликациюЅулевыхƒиапазонов")	operations_research::sat::CpModelBuilder::AddImplication(absl::Span< operations_research::sat::BoolVar const >,absl::Span< operations_research::sat::BoolVar const >);
+%esb_name_local("ƒобавить÷епочкуќграничений")				operations_research::sat::CpModelBuilder::AddCircuitConstraint();
+%esb_name_local("ƒобавитьћножественную÷епочкуќграничений")	operations_research::sat::CpModelBuilder::AddMultipleCircuitConstraint();
+%esb_name_local("ƒобавитьќграничениеЅезѕерекрыти€2D")		operations_research::sat::CpModelBuilder::AddNoOverlap2D();
+//
+//Constraint CpModelBuilder::AddAllDifferent(absl::Span<const IntVar> vars);
+//Constraint CpModelBuilder::AddAllDifferent(absl::Span<const LinearExpr> exprs)
+//Constraint CpModelBuilder::AddAllDifferent(std::initializer_list<LinearExpr> exprs)
+%rename(AddAllDifferentSpanOfSatInteger)	operations_research::sat::CpModelBuilder::AddAllDifferent(absl::Span<const IntVar> vars);
+%rename(AddAllDifferentSpanOfLinearExpr)	operations_research::sat::CpModelBuilder::AddAllDifferent(absl::Span<const LinearExpr> exprs);
+%ignore operations_research::sat::CpModelBuilder::AddAllDifferent(std::initializer_list<LinearExpr> exprs);
+//TODO	AddAllDifferent
+
+//Constraint CpModelBuilder::AddMinEquality(const LinearExpr& target, absl::Span<const IntVar> vars)
+//Constraint CpModelBuilder::AddMinEquality(const LinearExpr& target, absl::Span<const LinearExpr> exprs)
+//Constraint CpModelBuilder::AddMinEquality(const LinearExpr& target, std::initializer_list<LinearExpr> exprs)
+%rename(AddMinEqualitySpanOfSatInteger)	operations_research::sat::CpModelBuilder::AddMinEquality(const LinearExpr& target, absl::Span<const IntVar> vars);
+%rename(AddMinEqualitySpanOfLinearExpr)	operations_research::sat::CpModelBuilder::AddMinEquality(const LinearExpr& target, absl::Span<const LinearExpr> exprs);
+%ignore operations_research::sat::CpModelBuilder::AddMinEquality(const LinearExpr& target, std::initializer_list<LinearExpr> exprs);
+//TODO	AddMinEquality
+
+//Constraint CpModelBuilder::AddMaxEquality(const LinearExpr& target, absl::Span<const IntVar> vars)
+//Constraint CpModelBuilder::AddMaxEquality(const LinearExpr& target, absl::Span<const LinearExpr> exprs)
+//Constraint CpModelBuilder::AddMaxEquality(const LinearExpr& target, std::initializer_list<LinearExpr> exprs)
+%rename(AddMaxEqualitySpanOfSatInteger)	operations_research::sat::CpModelBuilder::AddMaxEquality(const LinearExpr& target, absl::Span<const IntVar> vars);
+%rename(AddMaxEqualitySpanOfLinearExpr)	operations_research::sat::CpModelBuilder::AddMaxEquality(const LinearExpr& target, absl::Span<const LinearExpr> exprs);
+%ignore operations_research::sat::CpModelBuilder::AddMaxEquality(const LinearExpr& target, std::initializer_list<LinearExpr> exprs);
+//TODO	AddMaxEquality
+
+//CpModelBuilder::
+//Constraint AddMultiplicationEquality(const LinearExpr& target, absl::Span<const LinearExpr> exprs);
+//Constraint AddMultiplicationEquality(const LinearExpr& target, absl::Span<const IntVar> vars);
+//Constraint AddMultiplicationEquality(const LinearExpr& target, std::initializer_list<LinearExpr> exprs);
+//Constraint AddMultiplicationEquality(const LinearExpr& target, const LinearExpr& left, const LinearExpr& right);
+%rename(AddMultiplicationEqualityWithSpanOfLinearExpr)		operations_research::sat::CpModelBuilder::AddMultiplicationEquality(const LinearExpr& target, absl::Span<const LinearExpr> exprs);
+%rename(AddMultiplicationEqualityWithSpanOfSatInteger)		operations_research::sat::CpModelBuilder::AddMultiplicationEquality(const LinearExpr& target, absl::Span<const IntVar> vars);
+%ignore operations_research::sat::CpModelBuilder::AddMultiplicationEquality(const LinearExpr& target, std::initializer_list<LinearExpr> exprs);
+%rename(AddMultiplicationEqualityWithLinearExprLeftRight)	operations_research::sat::CpModelBuilder::AddMultiplicationEquality(const LinearExpr& target, const LinearExpr& left, const LinearExpr& right);
+//TODO AddMultiplicationEquality
+
+
+//CpModelBuilder::
+//  void AddDecisionStrategy(
+//      absl::Span<const IntVar> variables,
+//      DecisionStrategyProto::VariableSelectionStrategy var_strategy,
+//      DecisionStrategyProto::DomainReductionStrategy domain_strategy);
+//  void AddDecisionStrategy(
+//      absl::Span<const BoolVar> variables,
+//      DecisionStrategyProto::VariableSelectionStrategy var_strategy,
+//      DecisionStrategyProto::DomainReductionStrategy domain_strategy);
+//  void AddDecisionStrategy(
+//      absl::Span<const LinearExpr> expressions,
+//      DecisionStrategyProto::VariableSelectionStrategy var_strategy,
+//      DecisionStrategyProto::DomainReductionStrategy domain_strategy);
+//  void AddDecisionStrategy(
+//      std::initializer_list<LinearExpr> expressions,
+//      DecisionStrategyProto::VariableSelectionStrategy var_strategy,
+//      DecisionStrategyProto::DomainReductionStrategy domain_strategy);
+//
+%rename(AddDecisionStrategyFromSpanOfSatInteger)	operations_research::sat::CpModelBuilder::AddDecisionStrategy(absl::Span<const IntVar> variables, DecisionStrategyProto::VariableSelectionStrategy var_strategy, DecisionStrategyProto::DomainReductionStrategy domain_strategy);
+%rename(AddDecisionStrategyFromSpanOfSatBoolean)	operations_research::sat::CpModelBuilder::AddDecisionStrategy(absl::Span<const BoolVar> variables, DecisionStrategyProto::VariableSelectionStrategy var_strategy, DecisionStrategyProto::DomainReductionStrategy domain_strategy);
+%rename(AddDecisionStrategyFromSpanLinearExpr)		operations_research::sat::CpModelBuilder::AddDecisionStrategy(absl::Span<const LinearExpr> expressions, DecisionStrategyProto::VariableSelectionStrategy var_strategy, DecisionStrategyProto::DomainReductionStrategy domain_strategy);
+%ignore operations_research::sat::CpModelBuilder::AddDecisionStrategy(std::initializer_list<LinearExpr> expressions, DecisionStrategyProto::VariableSelectionStrategy var_strategy, DecisionStrategyProto::DomainReductionStrategy domain_strategy);
+//
+//TODO	оригинальный ::Build возвращает const CpModelProto&, то есть константную ссылку на свое сформированное прото
+//		Ќќ! чтобы не возитьс€ с OptimizationModelProtoCRef пока просто расширим интерфейс чтобы возвращалась копи€ 
+//			это в общем-то можно, т.к. OptimizationModelProto - это вал-тип
+//			Ќќ! Ќичего с этой копией делать больше Ќ≈∆≈Ћј“≈Ћ№Ќќ - только передать в .–еши«адачуѕоћодели(описание_модели, модель)
+//		 остыль. Ќужно убрать!
+//
+%extend operations_research::sat::CpModelBuilder {
+	OptimizationModelProto GetModelProto() const 
+	{
+		return OptimizationModelProto::Create(_.Build());
+	}
+}
+%esb_name_local("ѕолучитьќписаниећодели")			operations_research::sat::CpModelBuilder::GetModelProto;
+
+
+
+
+// ------------- -absl::Span- ----------------------------------------
+// 
+//NOTE	ћногие методы —ј“ принимают в качестве параметра absl::Span<-чего-то->
+//		Ќо мы не делаем эти Span отдельными 1—-объектами, т.к. фактически јѕ» декларировано
+//		таким образом дл€ удобства - Span может на лету создаватьс€ из любого подход€щего контейнера
+//		(например из вектора)
+//		(а нам еще и очень неудобно делать объект-Span т.к. это рефтип требующий владельца) 
+//		ѕоэтому мы делаем объекты-векторы необходимых типов, 
+//		а дл€ соответствующийх Span указываем, что они _well_known_ со спец-конвертером
+//		(см. esb_map_well_known_for_arg_template)
+//
+%esb_wrap_as_template(	std::vector<operations_research::sat::IntVar>,	"(IntegerVariable, IntegerVariableRef, IntegerVariableConst, IntegerVariableCRef)",	
+						"59853312-892B-4260-AE43-180627102E42", 	CppArrayOfIntegerVariable, 		"—ппћассивѕерем÷елое", 					"");
+%esb_ctor_creator(std::vector<operations_research::sat::IntVar>::vector());
+%esb_map_well_known_for_arg_template(absl::Span<::operations_research::sat::IntVar const>, 
+	"const CppArrayOfIntegerVariable&", "convert_to_arg<const std::vector<operations_research::sat::IntVar>&>",	AbslSpanOfConstIntegerVariable );
+//
+%esb_wrap_as_template(	std::vector<operations_research::sat::BoolVar>,	"(BooleanVariable, BooleanVariableRef, BooleanVariableConst, BooleanVariableCRef)",	
+						"59853312-892B-4260-AE43-180627102E42", 	CppArrayOfBooleanVariable, 		"—ппћассивѕеремЅулево", 					"");
+%esb_ctor_creator(std::vector<operations_research::sat::BoolVar>::vector());
+%esb_map_well_known_for_arg_template(absl::Span<::operations_research::sat::BoolVar const>, 
+	"const CppArrayOfBooleanVariable&", "convert_to_arg<const std::vector<operations_research::sat::BoolVar>&>",	AbslSpanOfConstBooleanVariable );
+//
+//TODO	Ќамертво забыл зачем CppArrayOfDoubleCRef понадобилс€..
+%esb_wrap_info_cref(	std::vector<double>,		"3827901F-7A37-4747-8D9E-F3DDD4845A0E", 	"CppArrayOfDoubleCRef",	"—ппћассивƒействительных онст—сылка",		"");
+%esb_wrap_as_template(	std::vector<double>,	"(Double, DoubleRef, DoubleConst, DoubleCRef)",	
+						"07E27711-4CF9-4B24-A384-60810EADB49E", 	CppArrayOfDouble, 				"—ппћассивƒействительных", 					"");
+%esb_ctor_creator(std::vector<double>::vector());
+%esb_map_well_known_for_arg_template(absl::Span<double const>, 
+	"const CppArrayOfDouble&", "convert_to_arg<const std::vector<double>&>",	AbslSpanOfConstDouble );
+//
+%esb_wrap_as_template(	std::vector<operations_research::sat::LinearExpr>,	"(IntegerLinearExpr, IntegerLinearExprRef, IntegerLinearExprConst, IntegerLinearExprCRef)",	
+						"651C3D31-8D21-4DF1-9EBD-F53CC757DD16", 	CppArrayOfIntegerLinearExpr, 				"—ппћассивЋинейное¬ыраж÷елочисленное", 					"");
+%esb_ctor_creator(std::vector<operations_research::sat::LinearExpr>::vector());
+%esb_map_well_known_for_arg_template(absl::Span<operations_research::sat::LinearExpr const>, 
+	"const CppArrayOfIntegerLinearExpr&", "convert_to_arg<const std::vector<operations_research::sat::LinearExpr>&>",	AbslSpanOfConstLinearExpr );
+//
+//NOTE	вектор дл€ int уже объ€влен в _sorted_interval_list.i
+%esb_map_well_known_for_arg_template(absl::Span<int const>, 
+	"const CppArrayOfInteger32&", "convert_to_arg<const std::vector<int>&>", AbslSpanOfConstInteger32 );
+//
+//TODO	ћожно было бы, наверное, дл€ вектора креатор делать по-умолчанию.. или конструктор.. или ненадо.. подумать надо.
+%esb_ctor_creator(std::vector<operations_research::sat::IntervalVar>::vector());
+//TODO	ј вот вс€ эта "машинери€" с _map_well_known_for_ соверщенно не смотрит, что никакого CppArrayOfIntervalVariable
+//		и в помине не объ€влено.. ѕлохо это.. “ам можно через tmap поискать!
+//		ј ведь вроде бы дл€ параметров есть проверка!!!
+%esb_wrap_as_template(	std::vector<operations_research::sat::IntervalVar>, "(IntervalVariable, IntervalVariableRef, IntervalVariableConst, IntervalVariableCRef)",	
+						"6DA38625-FB53-46C3-A76F-E6DB0DBC6972", 	CppArrayOfIntervalVariable, 		"—ппћассивѕерем»нтервал", 					"");
+%esb_map_well_known_for_arg_template(absl::Span<::operations_research::sat::IntervalVar const>, 
+	"const CppArrayOfIntervalVariable&", "convert_to_arg<const std::vector<operations_research::sat::IntervalVar>&>", AbslSpanOfConstIntervalVariable );
+
+
+
+
+// ------------ -API-PART- ---------------
+//
+
+//
+//bool SolutionBooleanValue(const CpSolverResponse& r, BoolVar x);
+//int64_t SolutionIntegerValue(const CpSolverResponse& r, const LinearExpr& expr);
+// 
+//	Ёти методы "распаковывают" значени€ из CpSolverResponse, и, видимо, сделаны отдельно свободными 
+//	чтобы "разв€зать" прото-файл CpSolverResponse и определенные в cp_model.h классы решател€
+//	Ќахожу дл€ нас это неудобным и как свободные методы игнорирую 
+//	и добавл€ю соответствующие методы интерфейса CpSolverResponse
+//	(см. cp_model.pb.h.CpSolverResponce.swi)
+// 
+// –ешени€÷елочисленное«начение»зЋинейного¬ыраж
+// –ешени€÷елочисленное«начение»зѕерем÷елое
+//%esb_name_local("ѕолучитьЅулево»зќтвета–ешател€")     	operations_research::sat::SolutionBooleanValue(operations_research::sat::CpSolverResponse const &,operations_research::sat::BoolVar);
+%ignore operations_research::sat::SolutionIntegerValue(const CpSolverResponse&, const LinearExpr&);
+// –ешени€Ѕулево«начение
+//%esb_name_local("ѕолучить÷елое»зќтвета–ешател€")     	operations_research::sat::SolutionIntegerValue(operations_research::sat::CpSolverResponse const &,operations_research::sat::LinearExpr const &);
+%ignore operations_research::sat::SolutionBooleanValue(const CpSolverResponse&, BoolVar);
+//
+
+
+//
+//inline LinearExpr operator-(LinearExpr expr) { return expr *= -1; }
+//
+%rename(NegateLinearExpr)     		operations_research::sat::operator -(operations_research::sat::LinearExpr);
+%rename(NegateDoubleLinearExpr)		operations_research::sat::operator-(operations_research::sat::DoubleLinearExpr);
+//TODO	≈сли что-то придумаетс€ вместо 'ќтрицнуть', простите.., то нужно переименовать
+%esb_name_local("ќтрицнутьЋинейное¬ыраж÷елочисленное")	operations_research::sat::operator-(operations_research::sat::LinearExpr);
+%esb_name_local("ќтрицнутьЋинейное¬ыражƒействительное")	operations_research::sat::operator-(operations_research::sat::DoubleLinearExpr);
+//
+
+
+//TODO	¬ообще-то лучше эти операторы не игнорировать, а использовать дл€ вывода в String
+//std::ostream& 					operator <<(std::ostream& os, const BoolVar& var);
+//TODO	ѕочему-то не получилось игнорировать это индивидуально каждый. ѕришлось всех скопом.
+//%ignore operations_research::sat::operator<<(std::ostream &,operations_research::sat::BoolVar const &);
+//%ignore operations_research::sat::operator<<(std::ostream &,operations_research::sat::LinearExpr const &);
+//%ignore operations_research::sat::operator<<(std::ostream &,operations_research::sat::DoubleLinearExpr const &); 
+//%ignore operations_research::sat::operator<<(std::ostream &,operations_research::sat::IntervalVar const &);
+//%ignore operations_research::sat::operator<<(std::ostream &,operations_research::sat::IntVar const &);
+//
+%ignore operations_research::sat::operator<<;
+
+
+//inline LinearExpr operator+(const LinearExpr& lhs, const LinearExpr& rhs)
+//inline LinearExpr operator+(LinearExpr&& lhs, const LinearExpr& rhs)
+//inline LinearExpr operator+(const LinearExpr& lhs, LinearExpr&& rhs)
+//inline LinearExpr operator+(LinearExpr&& lhs, LinearExpr&& rhs)
+%rename(AppendLinearExpr)	operations_research::sat::operator+(const LinearExpr& lhs, const LinearExpr& rhs);
+%ignore operations_research::sat::operator+(LinearExpr&& lhs, const LinearExpr& rhs);
+%ignore operations_research::sat::operator+(const LinearExpr& lhs, LinearExpr&& rhs);
+%ignore operations_research::sat::operator+(LinearExpr&& lhs, LinearExpr&& rhs);
+
+
+//inline LinearExpr operator-(const LinearExpr& lhs, const LinearExpr& rhs)
+//inline LinearExpr operator-(LinearExpr&& lhs, const LinearExpr& rhs)
+//inline LinearExpr operator-(const LinearExpr& lhs, LinearExpr&& rhs)
+//inline LinearExpr operator-(LinearExpr&& lhs, LinearExpr&& rhs)
+%rename(SubstructLinearExpr)	operations_research::sat::operator-(const LinearExpr& lhs, const LinearExpr& rhs);
+//TODO
+%ignore operations_research::sat::operator-(LinearExpr&& lhs, const LinearExpr& rhs);
+%ignore operations_research::sat::operator-(const LinearExpr& lhs, LinearExpr&& rhs);
+%ignore operations_research::sat::operator-(LinearExpr&& lhs, LinearExpr&& rhs);
+
+//inline LinearExpr operator*(LinearExpr expr, int64_t factor)
+//inline LinearExpr operator*(int64_t factor, LinearExpr expr)
+%rename(LinearExprMultiply)	operations_research::sat::operator*(LinearExpr expr, int64_t factor);
+%ignore operations_research::sat::operator*(int64_t factor, LinearExpr expr);
+
+//inline DoubleLinearExpr operator-(DoubleLinearExpr expr)
+%rename(DoubleLinearExprNegate)	operations_research::sat::operator-(DoubleLinearExpr expr);
+
+//inline DoubleLinearExpr operator+(const DoubleLinearExpr& lhs, const DoubleLinearExpr& rhs)
+//inline DoubleLinearExpr operator+(DoubleLinearExpr&& lhs, const DoubleLinearExpr& rhs)
+//inline DoubleLinearExpr operator+(const DoubleLinearExpr& lhs, DoubleLinearExpr&& rhs)
+//inline DoubleLinearExpr operator+(DoubleLinearExpr&& lhs, DoubleLinearExpr&& rhs)
+%rename(DoubleLinearExprAppendExpr)	operations_research::sat::operator+(const DoubleLinearExpr& lhs, const DoubleLinearExpr& rhs);
+//TODO
+%ignore operations_research::sat::operator+(DoubleLinearExpr&& lhs, const DoubleLinearExpr& rhs);
+%ignore operations_research::sat::operator+(const DoubleLinearExpr& lhs, DoubleLinearExpr&& rhs);
+%ignore operations_research::sat::operator+(DoubleLinearExpr&& lhs, DoubleLinearExpr&& rhs);
+//inline DoubleLinearExpr operator+(DoubleLinearExpr expr, double rhs)
+//inline DoubleLinearExpr operator+(double lhs, DoubleLinearExpr expr)
+%rename(DoubleLinearExprAppendDouble)	operations_research::sat::operator+(DoubleLinearExpr expr, double rhs);
+%ignore operations_research::sat::operator+(double lhs, DoubleLinearExpr expr);
+
+//inline DoubleLinearExpr operator-(const DoubleLinearExpr& lhs, const DoubleLinearExpr& rhs)
+//inline DoubleLinearExpr operator-(DoubleLinearExpr&& lhs, const DoubleLinearExpr& rhs)
+//inline DoubleLinearExpr operator-(const DoubleLinearExpr& lhs, DoubleLinearExpr&& rhs)
+//inline DoubleLinearExpr operator-(DoubleLinearExpr&& lhs, DoubleLinearExpr&& rhs)
+//inline DoubleLinearExpr operator-(DoubleLinearExpr epxr, double rhs)
+//inline DoubleLinearExpr operator-(double lhs, DoubleLinearExpr expr)
+%rename(DoubleLinearExprSubstructExpr)		operations_research::sat::operator-(const DoubleLinearExpr& lhs, const DoubleLinearExpr& rhs);
+%ignore operations_research::sat::operator-(DoubleLinearExpr&& lhs, const DoubleLinearExpr& rhs);
+%ignore operations_research::sat::operator-(const DoubleLinearExpr& lhs, DoubleLinearExpr&& rhs);
+%ignore operations_research::sat::operator-(DoubleLinearExpr&& lhs, DoubleLinearExpr&& rhs);
+%rename(DoubleLinearExprSubstructDouble)	operations_research::sat::operator-(DoubleLinearExpr epxr, double rhs);
+%ignore operations_research::sat::operator-(double lhs, DoubleLinearExpr expr);
+
+//inline DoubleLinearExpr operator*(DoubleLinearExpr expr, double factor)
+//inline DoubleLinearExpr operator*(double factor, DoubleLinearExpr expr)
+%rename(DoubleLinearExprMultiply)	operations_research::sat::operator*(DoubleLinearExpr expr, double factor);
+%ignore	operations_research::sat::operator*(double factor, DoubleLinearExpr expr);
+
+
+
+
+//NOTE	»гнорирование Not (см.ниже) делаем ƒќ %include "ortools/sat/cp_model.h", чтобы "игнор" применилс€
+//
+%ignore operations_research::sat::Not(BoolVar);
+//
+%include "ortools/sat/cp_model.h"
+//
+// 
+//BoolVar Not(BoolVar x);
+//TODO	BoolVar - это реф-тип, и дл€ создани€ нового-инвертированного в методе нужен ему владелец
+//		по смыслу вроде пон€тно, что новому-инвертированному как-то нужно дать того же владельца, что и у аргумента
+//		Ќќ! ≈—виг так глубоко не мыслит.
+//		ѕоэтому оргинальный метод игнорируем и всовываем свой, который просто вызывает .Not у аргумента
+//		(собственно как и гугль в коде делает)
+//NOTE	¬ключение делаем ѕќ—Ћ≈ %include "ortools/sat/cp_model.h", чтобы ѕќ—Ћ≈ определени€ BooleanVariable было
+//
+%esb_inline 
+%{
+inline
+BooleanVariable NotBooleanVariable(const BooleanVariable& value_)
+{
+	return value_.GetContained().Not();
+}
+%}
+//TODO	Ќахально всовываем %esb_inline в интерфейс модул€
+//NOTE	»менуем »нвертировать, хот€ у Ѕулево есть и метод »нвертировать, но он вызывает тот же .Not
+//		(иное разумное ру-им€ дл€ NotBooleanVariable, но не "»нвертировать" придумать немогу... ЌеѕеремЅулево? ќтрицнутьѕеремЅулево? хз..)
+%add_to_module_interface_meth(NotBooleanVariable, "»нвертироватьѕеремЅулево")
+
+//
+// end of "ortools/sat/cp_model.h"
+
+
+
+%include <ortools/sat/sat_parameters.pb.swi>
+
+
+%include <ortools/sat/cp_model.pb.h.CpSolverResponce.swi>
+
+
+%include <ortools/sat/SolutionObserver.swi>
+
+
+%include <ortools/sat/model.swi>
+
+
+%include <ortools/sat/cp_model_solver.swi>
+
+
